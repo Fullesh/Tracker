@@ -71,3 +71,13 @@ type Task struct {
 	CreatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
+
+type User struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	EmployeeID   *uint     `gorm:"index;constraint:OnDelete:SET NULL;" json:"employee_id,omitempty"`
+	Employee     *Employee `gorm:"foreignKey:EmployeeID" json:"employee"`
+	Username     string    `gorm:"size:20;uniqueIndex;not null" json:"username"`
+	PasswordHash string    `gorm:"size:255;not null" json:"password_hash"`
+	IsAdmin      bool      `gorm:"default:true" json:"is_admin"`
+	CreatedAt    time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+}
