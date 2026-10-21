@@ -1,0 +1,72 @@
+package domain
+
+import "time"
+
+type Wall struct {
+	ID      uint `gorm:"primaryKey" json:"id"`
+	FloorID uint `gorm:"not null; index" json:"floor_id"`
+
+	X1 int `gorm:"not null" json:"x1"`
+	Y1 int `gorm:"not null" json:"y1"`
+	X2 int `gorm:"not null" json:"x2"`
+	Y2 int `gorm:"not null" json:"y2"`
+}
+
+type RoomLabel struct {
+	ID      uint   `gorm:"primaryKey" json:"id"`
+	FloorID uint   `gorm:"not null;index" json:"floor_id"`
+	Text    string `gorm:"size:100;not null;index" json:"text"`
+	X       int    `gorm:"not null" json:"x"`
+	Y       int    `gorm:"not null" json:"y"`
+}
+
+type Floor struct {
+	ID     uint   `gorm:"primaryKey" json:"id"`
+	Name   string `gorm:"size:100;not null" json:"name"`
+	Order  int    `gorm:"default:1;not null" json:"order"`
+	Width  int    `gorm:"default:1000;not null" json:"width"`
+	Height int    `gorm:"default:600;not null" json:"height"`
+
+	Walls      []Wall      `gorm:"constraint:OnDelete:CASCADE;" json:"walls,omitempty"`
+	Labels     []RoomLabel `gorm:"constraint:OnDelete:CASCADE;" json:"labels,omitempty"`
+	Workplaces []Workplace `gorm:"constraint:OnDelete:CASCADE;" json:"workplaces,omitempty"`
+}
+
+type Workplace struct {
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	FloorID  uint   `gorm:"not null;index" json:"floor_id"`
+	Code     string `gorm:"size:20;uniqueIndex;not null" json:"code"`
+	Kind     string `gorm:"size:20;default:'pc';not null" json:"kind"`
+	Employee string `gorm:"size:150" json:"employee"`
+	Label    string `gorm:"size:150" json:"label"`
+	Room     string `gorm:"size:150" json:"room"`
+	X        int    `gorm:"not null" json:"x"`
+	Y        int    `gorm:"not null" json:"y"`
+	Tasks    []Task `gorm:"constraint:OnDelete:CASCADE;" json:"tasks,omitempty"`
+}
+
+type Employee struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	FullName    string    `gorm:"size:200;not null;index" json:"full_name"`
+	Photo       string    `gorm:"size:255" json:"photo"`
+	Position    string    `gorm:"size:150" json:"position"`
+	Department  string    `gorm:"size:150;not null;index" json:"department"`
+	WorkPhone   string    `gorm:"size:50" json:"work_phone"`
+	Email       string    `gorm:"size:255" json:"email"`
+	WorkplaceID *uint     `gorm:"constraint:OnDelete:SET NULL;" json:"workplace_id,omitempty"`
+	Equipment   string    `gorm:"type:text" json:"equipment"`
+	CreatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
+
+type Task struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	WorkplaceID uint      `gorm:"not null;index;constraint:OnDelete:CASCADE;" json:"workplace_id"`
+	Title       string    `gorm:"size:255;not null" json:"title"`
+	Description string    `gorm:"type:text" json:"description"`
+	Status      string    `gorm:"size:50;default:'created';not null;index" json:"status"`
+	Priority    string    `gorm:"size:50;default:'urgent';not null;index" json:"priority"`
+	Severity    string    `gorm:"size:50;default:'minor';not null;index" json:"severity"`
+	CreatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
