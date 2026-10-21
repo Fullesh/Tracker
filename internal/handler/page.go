@@ -46,6 +46,8 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	auth := h.currentAuth(r)
 	var floors []domain.Floor
 	var employees []domain.Employee
+	var tasks []domain.Task
+	h.db.Order("id ASC").Find(&tasks)
 	h.db.Preload("Walls").Preload("Labels").Preload("Workplaces").Find(&floors)
 	h.db.Find(&employees)
 	isAdmin, _ := auth["is_admin"].(bool)
@@ -55,6 +57,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	configData := map[string]any{
 		"floors":      floors,
 		"employees":   employees,
+		"tasks":       tasks,
 		"assignees":   defaultAssignees,
 		"statuses":    defaultStatuses,
 		"priorities":  defaultPriorities,
