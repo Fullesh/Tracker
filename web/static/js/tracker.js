@@ -1340,9 +1340,10 @@
             // ----- РЕЖИМ РЕДАКТИРОВАНИЯ -----
             const form = el('form', { id: 'empEditForm', autocomplete: 'off' });
 
+            const isNew = !emp || !emp.id;
             const header = el('div', { class: 'modal__header' }, [
-                el('h2', { text: `Редактирование: ${emp.full_name}` }),
-                el('button', { class: 'icon-btn', type: 'button', 'data-close': '', html: '&times;', onclick: () => openEmployeeModal(emp, false) })
+                el('h2', { text: isNew ? 'Новый сотрудник' : `Редактирование: ${emp.full_name}` }),
+                el('button', { class: 'icon-btn', type: 'button', 'data-close': '', html: '&times;', onclick: () => isNew ? closeEmployeeModal() : openEmployeeModal(emp, false) })
             ]);
 
             const errBanner = el('div', {
@@ -1455,8 +1456,8 @@
             const footer = el('div', { class: 'modal__footer' }, [
                 el('div', {}),
                 el('div', { class: 'modal__footer-right' }, [
-                    el('button', { class: 'btn btn--ghost', type: 'button', text: 'Отмена', onclick: () => openEmployeeModal(emp, false) }),
-                    el('button', { class: 'btn btn--action', type: 'submit', id: 'empSaveBtn', text: 'Сохранить изменения' }),
+                    el('button', { class: 'btn btn--ghost', type: 'button', text: 'Отмена', onclick: () => isNew ? closeEmployeeModal() : openEmployeeModal(emp, false) }),
+                    el('button', { class: 'btn btn--action', type: 'submit', id: 'empSaveBtn', text: isNew ? 'Создать сотрудника' : 'Сохранить изменения' }),
                 ])
             ]);
 
@@ -1471,7 +1472,8 @@
 
                 const formData = new FormData(form);
                 try {
-                    const resp = await fetch(`/api/employees/${emp.id}/update/`, {
+                    const url = isNew ? '/api/employees/create/' : `/api/employees/${emp.id}/update/`;
+                    const resp = await fetch(url, {
                         method: 'POST',
                         headers: {
                             'X-CSRFToken': getCsrfToken(),
@@ -1484,9 +1486,13 @@
                     }
                     // Обновляем сотрудника в памяти
                     const updatedEmp = res.employee;
-                    const idx = state.employees.findIndex((x) => x.id === emp.id);
-                    if (idx !== -1) {
-                        state.employees[idx] = updatedEmp;
+                    if (isNew) {
+                        state.employees.push(updatedEmp);
+                    } else {
+                        const idx = state.employees.findIndex((x) => x.id === emp.id);
+                        if (idx !== -1) {
+                            state.employees[idx] = updatedEmp;
+                        }
                     }
                     // Добавляем отдел в фильтры если новый
                     if (updatedEmp.department && !state.departments.includes(updatedEmp.department)) {
@@ -1501,7 +1507,7 @@
                     errBanner.textContent = err.message;
                     errBanner.hidden = false;
                     saveBtn.disabled = false;
-                    saveBtn.textContent = 'Сохранить изменения';
+                    saveBtn.textContent = isNew ? 'Создать сотрудника' : 'Сохранить изменения';
                 }
             });
 
@@ -1741,7 +1747,17 @@
 
     document.getElementById('createBtn').addEventListener('click', () => {
         if (state.view === 'employees') {
-            window.open('/admin/users/employee/add/', '_blank');
+            openEmployeeModal({
+                id: 0,
+                full_name: '',
+                position: '',
+                department: '',
+                work_phone: '',
+                email: '',
+                equipment: '',
+                workplace: null,
+                can_edit: true,
+            }, true);
             return;
         }
         openModal(null, state.view === 'map' && state.selectedPlace ? { workplace: state.selectedPlace } : {});
