@@ -131,3 +131,20 @@ func (h *Handler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 		"task":    task,
 	})
 }
+
+func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	taskID, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Некорректный ID задачи", http.StatusBadRequest)
+		return
+	}
+	if err := h.db.Delete(&domain.Task{}, taskID).Error; err != nil {
+		http.Error(w, "Ошибка удаления задачи: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+	})
+}
