@@ -32,12 +32,13 @@ func (h *Handler) InitRoutes() http.Handler {
 	mux.HandleFunc("/", h.Index)
 	mux.HandleFunc("/constructor/", h.Constructor)
 
-	// REST
+	// REST FLOORS
 	mux.HandleFunc("POST /api/floors/{id}/save/{$}", h.SaveFloor)
 	mux.HandleFunc("POST /api/floors/create/{$}", h.CreateFloor)
 
 	//REST USERS
 	mux.HandleFunc("GET /api/employees/{$}", h.GetEmployees)
+	mux.HandleFunc("POST /api/employees/create/{$}", h.CreateEmployee)
 	mux.HandleFunc("POST /api/employees/{id}/update/{$}", h.UpdateEmployee)
 	mux.HandleFunc("POST /api/auth/login/{$}", h.Login)
 	mux.HandleFunc("POST /api/auth/logout/{$}", h.Logout)
