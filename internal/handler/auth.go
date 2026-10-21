@@ -48,6 +48,40 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) currentAuth(r *http.Request) map[string]any {
+	cookie, err := r.Cookie("session_user")
+	if err != nil || cookie.Value == "" {
+		return map[string]any{
+			"is_authenticated": false,
+			"username":         "",
+			"is_admin":         false,
+		}
+	}
+	var user domain.User
+	if err := h.db.Where("username = ?", cookie.Value).First(&user).Error; err == nil {
+		return map[string]any{
+			"is_authenticated": true,
+			"username":         user.Username,
+			"is_admin":         user.IsAdmin,
+		}
+	}
+	return map[string]any{
+		"is_authenticated": false,
+		"username":         "",
+		"is_admin":         false,
+	}
+}
+
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	return
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_user",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+	})
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+	})
 }
