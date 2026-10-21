@@ -10,6 +10,7 @@ import (
 
 	"PTracker/internal/domain"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -51,6 +52,9 @@ func Seed(db *gorm.DB) error {
 		return fmt.Errorf("ошибка наполнения этажей: %w", err)
 	}
 
+	if err := seedAdmin(db); err != nil {
+		return fmt.Errorf("Ошибка создания админа: %w", err)
+	}
 	log.Println("Наполнение базы данных успешно завершено!")
 	return nil
 }
@@ -282,5 +286,26 @@ func seedFloors(db *gorm.DB) error {
 	}
 
 	log.Printf("Карты этажей, стены, подписи и рабочие места успешно сгенерированы!")
+	return nil
+}
+
+func seedAdmin(db *gorm.DB) error {
+	var count int64
+	db.Model(&domain.User{}).Where("username = ?", "admin").Count(&count)
+	if count > 0 {
+		return nil
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	admin := domain.User{
+		Username:     "admin",
+		PasswordHash: string(hash),
+		IsAdmin:      true,
+	}
+	if err := db.Create(&admin).Error; err != nil {
+		return err
+	}
 	return nil
 }
