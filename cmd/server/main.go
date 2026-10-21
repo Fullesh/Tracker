@@ -27,6 +27,34 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, `{"status": "ok", "app": "PTracker Go", "message": "server: healthy", "db": "healthy"}`)
 }
 
+var defaultAssignees = []map[string]any{
+	{"id": "1", "name": "Иван Иванов", "role": "Системный администратор"},
+	{"id": "2", "name": "Сергей Сергеев", "role": "Системный администратор"},
+	{"id": "3", "name": "Анатолий Анатольев", "role": "Специалист по МТО"},
+}
+
+var defaultStatuses = []map[string]any{
+	{"id": "open", "name": "Открыта"},
+	{"id": "in_progress", "name": "В работе"},
+	{"id": "review", "name": "На проверке"},
+	{"id": "closed", "name": "Закрыта"},
+}
+
+var defaultPriorities = []map[string]any{
+	{"id": "blocker", "name": "Блокер"},
+	{"id": "critical", "name": "Критичный"},
+	{"id": "high", "name": "Высокий"},
+	{"id": "normal", "name": "Средний"},
+	{"id": "low", "name": "Низкий"},
+}
+
+var defaultSeverities = []map[string]any{
+	{"id": "s1", "name": "S1 · Критическая"},
+	{"id": "s2", "name": "S2 · Значительная"},
+	{"id": "s3", "name": "S3 · Умеренная"},
+	{"id": "s4", "name": "S4 · Незначительная"},
+}
+
 func main() {
 	migrateFlag := flag.Bool("migrate", false, "migrate database")
 	seedFlag := flag.Bool("seed", false, "seed database")
@@ -72,7 +100,19 @@ func main() {
 		var employees []domain.Employee
 		db.Preload("Walls").Preload("Labels").Preload("Workplaces").Find(&floors)
 		db.Find(&employees)
-		configData := map[string]any{"floors": floors, "employees": employees}
+		configData := map[string]any{
+			"floors":      floors,
+			"employees":   employees,
+			"assignees":   defaultAssignees,
+			"statuses":    defaultStatuses,
+			"priorities":  defaultPriorities,
+			"severities":  defaultSeverities,
+			"departments": []string{"Разработка", "Бухгалтерия", "Продажи", "IT"},
+			"auth": map[string]any{
+				"is_authenticated": true,
+				"is_admin":         true,
+			},
+		}
 		configBytes, _ := json.Marshal(configData)
 		tmpl, _ := template.ParseFiles("web/templates/index.html")
 		data := map[string]any{"TrackerConfigJSON": template.JS(configBytes)}
