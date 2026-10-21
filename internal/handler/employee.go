@@ -13,16 +13,21 @@ func (h *Handler) GetEmployees(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Ошибка полученяи сотрудников"+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	auth := h.currentAuth(r)
+	isAdmin, _ := auth["is_admin"].(bool)
+	for i := range employees {
+		employees[i].CanEdit = isAdmin
+	}
 
 	var departments []string
 	h.db.Model(&domain.Employee{}).Distinct("department").Order("department ASC").Pluck("department", &departments)
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"employees":   employees,
 		"departments": departments,
 		"auth":        h.currentAuth(r),
 	})
+
 }
 
 func (h *Handler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +70,7 @@ func (h *Handler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.db.Preload("Workplace").First(&emp, employeeID)
+	emp.CanEdit = true
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{

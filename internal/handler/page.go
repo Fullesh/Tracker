@@ -43,10 +43,15 @@ func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
+	auth := h.currentAuth(r)
 	var floors []domain.Floor
 	var employees []domain.Employee
 	h.db.Preload("Walls").Preload("Labels").Preload("Workplaces").Find(&floors)
 	h.db.Find(&employees)
+	isAdmin, _ := auth["is_admin"].(bool)
+	for i := range employees {
+		employees[i].CanEdit = isAdmin
+	}
 	configData := map[string]any{
 		"floors":      floors,
 		"employees":   employees,
