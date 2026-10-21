@@ -418,6 +418,89 @@
     const deskHoverCardEl = document.getElementById('deskHoverCard');
     const officeCanvasEl = document.getElementById('officeCanvas');
 
+    // ---------- Масштабирование (Zoom) и перемещение (Pan) карты ----------
+    let mapZoom = 1.0;
+    let mapViewBox = { x: 0, y: 0, w: 1200, h: 700 };
+    let isPanning = false;
+    let panStart = { x: 0, y: 0, vx: 0, vy: 0 };
+
+    function applyMapViewBox() {
+        if (!floorSvg) return;
+        floorSvg.setAttribute('viewBox', `${mapViewBox.x} ${mapViewBox.y} ${mapViewBox.w} ${mapViewBox.h}`);
+    }
+
+    function setMapZoom(newZoom, anchorX, anchorY) {
+        const clampedZoom = Math.max(0.4, Math.min(5.0, newZoom));
+        const curFloor = floorsById[state.floor];
+        const baseW = curFloor && curFloor.width ? curFloor.width : 1200;
+        const baseH = curFloor && curFloor.height ? curFloor.height : 700;
+
+        const rx = (anchorX - mapViewBox.x) / mapViewBox.w;
+        const ry = (anchorY - mapViewBox.y) / mapViewBox.h;
+
+        const newW = baseW / clampedZoom;
+        const newH = baseH / clampedZoom;
+
+        mapViewBox.x = anchorX - rx * newW;
+        mapViewBox.y = anchorY - ry * newH;
+        mapViewBox.w = newW;
+        mapViewBox.h = newH;
+        mapZoom = clampedZoom;
+
+        applyMapViewBox();
+    }
+
+    if (floorSvg) {
+        // Зум колёсиком мыши с фокусом в точку курсора
+        floorSvg.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const pt = floorSvg.createSVGPoint();
+            pt.x = e.clientX;
+            pt.y = e.clientY;
+            const cursorPt = pt.matrixTransform(floorSvg.getScreenCTM().inverse());
+
+            const factor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+            setMapZoom(mapZoom * factor, cursorPt.x, cursorPt.y);
+        }, { passive: false });
+
+        // Перетаскивание зажатой мышкой (Pan)
+        floorSvg.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.desk')) return;
+            isPanning = true;
+            panStart = { x: e.clientX, y: e.clientY, vx: mapViewBox.x, vy: mapViewBox.y };
+            floorSvg.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            const rect = floorSvg.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            const scaleX = mapViewBox.w / rect.width;
+            const scaleY = mapViewBox.h / rect.height;
+            mapViewBox.x = panStart.vx - (e.clientX - panStart.x) * scaleX;
+            mapViewBox.y = panStart.vy - (e.clientY - panStart.y) * scaleY;
+            applyMapViewBox();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isPanning) {
+                isPanning = false;
+                floorSvg.style.cursor = '';
+            }
+        });
+
+        // Двойной клик на пустое место — сброс масштаба в 100%
+        floorSvg.addEventListener('dblclick', (e) => {
+            if (e.target.closest('.desk')) return;
+            const curFloor = floorsById[state.floor];
+            mapZoom = 1.0;
+            const baseW = curFloor && curFloor.width ? curFloor.width : 1200;
+            const baseH = curFloor && curFloor.height ? curFloor.height : 700;
+            mapViewBox = { x: 0, y: 0, w: baseW, h: baseH };
+            applyMapViewBox();
+        });
+    }
+
     let hoverHideTimer = null;
 
     if (deskHoverCardEl) {
@@ -729,6 +812,9 @@
         }
 
         // План этажа: стены и подписи (из БД) или прямоугольники (fallback)
+        mapZoom = 1.0;
+        mapViewBox = { x: 0, y: 0, w: floor.width || 1200, h: floor.height || 700 };
+        applyMapViewBox();
         floorSvg.innerHTML = '';
         if (floor.walls && floor.walls.length) {
             const wallsGroup = svg('g', { class: 'floor__walls' });

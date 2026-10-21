@@ -399,8 +399,9 @@ select.input {
     box-shadow: var(--shadow-card);
     padding: 12px;
     position: relative;
+    overflow: hidden;
 }
-.floor { width: 100%; height: auto; display: block; user-select: none; }
+.floor { width: 100%; height: auto; display: block; user-select: none; cursor: grab; }
 
 /* Помещения и стены */
 .wall-line { stroke: #21201f; stroke-width: 4; stroke-linecap: round; }
