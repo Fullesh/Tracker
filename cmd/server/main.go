@@ -118,6 +118,25 @@ func main() {
 		data := map[string]any{"TrackerConfigJSON": template.JS(configBytes)}
 		tmpl.Execute(w, data)
 	})
+	http.HandleFunc("/constructor", func(w http.ResponseWriter, r *http.Request) {
+		var activeFloorID uint
+		var floors []domain.Floor
+		var employees []domain.Employee
+		db.Preload("Walls").Preload("Labels").Preload("Workplaces").Find(&floors)
+		db.Find(&employees)
+		if len(floors) > 0 {
+			activeFloorID = floors[0].ID
+		}
+		constructorData := map[string]any{
+			"floors":          floors,
+			"active_floor_id": activeFloorID,
+			"employees":       employees,
+		}
+		constructorBytes, _ := json.Marshal(constructorData)
+		tmpl, _ := template.ParseFiles("web/templates/constructor.html")
+		data := map[string]any{"ConstructorConfigJSON": template.JS(constructorBytes)}
+		tmpl.Execute(w, data)
+	})
 	log.Printf("Сервер запущен на порту %s \n", port)
 	// запускаем прослушивание входящих подключений
 	// Если возникает ошибка, то log.Fatal завершит программу
