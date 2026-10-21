@@ -1,11 +1,12 @@
 package main
 
 import (
+	"PTracker/internal/config"
+	"PTracker/internal/repository"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
-
-	"PTracker/internal/config"
 )
 
 // handler - обработчик
@@ -22,6 +23,8 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	migrateFlag := flag.Bool("migrate", false, "migrate database")
+	flag.Parse()
 	// Подключаемся к СУБД
 	db, err := config.InitDB()
 	if err != nil {
@@ -31,6 +34,15 @@ func main() {
 	// Закрываем соединения при завершении работы сервера
 	sqlDB, _ := db.DB()
 	defer sqlDB.Close()
+
+	if *migrateFlag {
+		log.Println("Запуск миграции БД")
+		if err := repository.Migrate(db); err != nil {
+			log.Fatalf("Ошибка миграции БД: %v", err)
+		}
+		log.Println("Миграции успешно применены")
+		return
+	}
 
 	port := ":1111"
 	// Привязываем URL "/ping" к обработчику
