@@ -2,12 +2,16 @@ package main
 
 import (
 	"PTracker/internal/config"
+	"PTracker/internal/domain"
 	"PTracker/internal/repository"
 	"PTracker/internal/seed"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
+	"os"
 )
 
 // handler - обработчик
@@ -54,11 +58,25 @@ func main() {
 	}
 
 	port := ":1111"
+	// Привяываем статические файлы (CSS, JS)
+	staticDir := "web/static"
+	if _, err := os.Stat(staticDir); os.IsNotExist(err) {
+		staticDir = "../../web/static"
+	}
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 	// Привязываем URL "/ping" к обработчику
 	http.HandleFunc("/ping", pingHandler)
 	// Root сайта
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Добро пожаловать")
+		var floors []domain.Floor
+		var employees []domain.Employee
+		db.Preload("Walls").Preload("Labels").Preload("Workplaces").Find(&floors)
+		db.Find(&employees)
+		configData := map[string]any{"floors": floors, "employees": employees}
+		configBytes, _ := json.Marshal(configData)
+		tmpl, _ := template.ParseFiles("web/templates/index.html")
+		data := map[string]any{"TrackerConfigJSON": template.JS(configBytes)}
+		tmpl.Execute(w, data)
 	})
 	log.Printf("Сервер запущен на порту %s \n", port)
 	// запускаем прослушивание входящих подключений
