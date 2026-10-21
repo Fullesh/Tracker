@@ -55,10 +55,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		"priorities":  defaultPriorities,
 		"severities":  defaultSeverities,
 		"departments": []string{"Разработка", "Бухгалтерия", "Продажи", "IT"},
-		"auth": map[string]any{
-			"is_authenticated": true,
-			"is_admin":         true,
-		},
+		"auth":        h.currentAuth(r),
 	}
 	configBytes, _ := json.Marshal(configData)
 	tmpl, _ := template.ParseFiles("web/templates/index.html")

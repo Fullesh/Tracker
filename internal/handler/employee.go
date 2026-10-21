@@ -21,10 +21,7 @@ func (h *Handler) GetEmployees(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"employees":   employees,
 		"departments": departments,
-		"auth": map[string]any{
-			"is_authenticated": true,
-			"is_admin":         true,
-		},
+		"auth":        h.currentAuth(r),
 	})
 }
 
