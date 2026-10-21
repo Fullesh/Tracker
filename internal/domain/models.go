@@ -63,7 +63,9 @@ type Employee struct {
 
 type Task struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
-	WorkplaceID uint      `gorm:"not null;index;constraint:OnDelete:CASCADE;" json:"workplace_id"`
+	WorkplaceID *uint     `gorm:"index;constraint:OnDelete:SET NULL;" json:"workplace"`
+	Creator     string    `gorm:"size:150" json:"creator"`
+	Assignee    string    `gorm:"size:50" json:"assignee"`
 	Title       string    `gorm:"size:255;not null" json:"title"`
 	Description string    `gorm:"type:text" json:"description"`
 	Status      string    `gorm:"size:50;default:'created';not null;index" json:"status"`
