@@ -42,5 +42,10 @@ func (h *Handler) InitRoutes() http.Handler {
 	mux.HandleFunc("POST /api/auth/login/{$}", h.Login)
 	mux.HandleFunc("POST /api/auth/logout/{$}", h.Logout)
 
+	//REST TASKS
+	mux.HandleFunc("POST /api/tasks/create/{$}", h.CreateTask)
+	mux.HandleFunc("POST /api/tasks/{id}/update/{$}", h.UpdateTask)
+	mux.HandleFunc("POST /api/tasks/{id}/delete/{$}", h.DeleteTask)
+
 	return mux
 }
