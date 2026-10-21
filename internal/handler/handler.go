@@ -33,8 +33,8 @@ func (h *Handler) InitRoutes() http.Handler {
 	mux.HandleFunc("/constructor/", h.Constructor)
 
 	// REST
-	mux.HandleFunc("POST /api/floors/{id}/save/", h.SaveFloor)
-	mux.HandleFunc("POST /api/floors/create/", h.CreateFloor)
+	mux.HandleFunc("POST /api/floors/{id}/save/{$}", h.SaveFloor)
+	mux.HandleFunc("POST /api/floors/create/{$}", h.CreateFloor)
 
 	return mux
 }
