@@ -3,6 +3,7 @@ package main
 import (
 	"PTracker/internal/config"
 	"PTracker/internal/repository"
+	"PTracker/internal/seed"
 	"flag"
 	"fmt"
 	"log"
@@ -24,6 +25,7 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	migrateFlag := flag.Bool("migrate", false, "migrate database")
+	seedFlag := flag.Bool("seed", false, "seed database")
 	flag.Parse()
 	// Подключаемся к СУБД
 	db, err := config.InitDB()
@@ -41,6 +43,13 @@ func main() {
 			log.Fatalf("Ошибка миграции БД: %v", err)
 		}
 		log.Println("Миграции успешно применены")
+		return
+	}
+	if *seedFlag {
+		log.Println("Запуск наполнения БД")
+		if err := seed.Seed(db); err != nil {
+			log.Fatalf("Ошибка сидирования: %v", err)
+		}
 		return
 	}
 
