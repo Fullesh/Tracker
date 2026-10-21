@@ -56,6 +56,7 @@ type Employee struct {
 	WorkplaceID *uint      `gorm:"constraint:OnDelete:SET NULL;" json:"workplace_id,omitempty"`
 	Workplace   *Workplace `gorm:"foreignKey:WorkplaceID" json:"workplace,omitempty"`
 	Equipment   string     `gorm:"type:text" json:"equipment"`
+	CanEdit     bool       `gorm:"-" json:"can_edit"`
 	CreatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
