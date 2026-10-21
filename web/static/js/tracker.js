@@ -58,6 +58,9 @@
     };
 
     function loadTasks() {
+        if (Array.isArray(CONFIG.tasks) && CONFIG.tasks.length > 0) {
+            return CONFIG.tasks;
+        }
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (raw) return JSON.parse(raw);
@@ -381,6 +384,14 @@
             const task = state.tasks.find((t) => t.id === id);
             if (task && task.status !== column.dataset.status) {
                 task.status = column.dataset.status;
+                fetch(`/api/tasks/${task.id}/update/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify({ status: task.status }),
+                }).catch((e) => console.error('Ошибка обновления задачи:', e));
                 saveTasks();
                 render();
             }
@@ -1007,7 +1018,7 @@
         modal.hidden = true;
     }
 
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const data = {
             title: form.title.value.trim(),
@@ -1023,18 +1034,56 @@
 
         const id = Number(form.id.value);
         if (id) {
+            try {
+                await fetch(`/api/tasks/${id}/update/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify(data),
+                });
+            } catch (err) {
+                console.error('Ошибка сохранения задачи:', err);
+            }
             Object.assign(state.tasks.find((t) => t.id === id), data);
         } else {
-            state.tasks.push({ id: nextId(), createdAt: Date.now(), ...data });
+            try {
+                const resp = await fetch('/api/tasks/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify(data),
+                });
+                const res = await resp.json();
+                if (res.task) {
+                    state.tasks.push(res.task);
+                } else {
+                    state.tasks.push({ id: nextId(), createdAt: Date.now(), ...data });
+                }
+            } catch (err) {
+                console.error('Ошибка создания задачи:', err);
+                state.tasks.push({ id: nextId(), createdAt: Date.now(), ...data });
+            }
         }
         saveTasks();
         closeModal();
         render();
     });
 
-    deleteBtn.addEventListener('click', () => {
+    deleteBtn.addEventListener('click', async () => {
         const id = Number(form.id.value);
         if (!id || !confirm(`Удалить задачу ${KEY_PREFIX}-${id}?`)) return;
+        try {
+            await fetch(`/api/tasks/${id}/delete/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrfToken() },
+            });
+        } catch (err) {
+            console.error('Ошибка удаления задачи:', err);
+        }
         state.tasks = state.tasks.filter((t) => t.id !== id);
         saveTasks();
         closeModal();
