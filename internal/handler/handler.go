@@ -38,6 +38,7 @@ func (h *Handler) InitRoutes() http.Handler {
 
 	//REST USERS
 	mux.HandleFunc("GET /api/employees/{$}", h.GetEmployees)
+	mux.HandleFunc("POST /api/employees/{id}/update/{$}", h.UpdateEmployee)
 
 	return mux
 }
