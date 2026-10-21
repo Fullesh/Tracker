@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"PTracker/internal/config"
 )
 
 // handler - обработчик
@@ -16,14 +18,24 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 	// Отправляем HTTP 200
 	w.WriteHeader(http.StatusOK)
 	// Пишем тело ответа
-	fmt.Fprintln(w, `{"status": "ok", "app": "PTracker Go", "message": "Сервер работает!"}`)
+	fmt.Fprintln(w, `{"status": "ok", "app": "PTracker Go", "message": "server: healthy", "db": "healthy"}`)
 }
 
 func main() {
+	// Подключаемся к СУБД
+	db, err := config.InitDB()
+	if err != nil {
+		log.Fatalf("Ошибка подключения к СУБД %v", err)
+	}
+
+	// Закрываем соединения при завершении работы сервера
+	sqlDB, _ := db.DB()
+	defer sqlDB.Close()
+
 	port := ":1111"
 	// Привязываем URL "/ping" к обработчику
 	http.HandleFunc("/ping", pingHandler)
-	// Root сайтаа
+	// Root сайта
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Добро пожаловать")
 	})
