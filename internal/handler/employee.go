@@ -78,3 +78,45 @@ func (h *Handler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 		"employee": emp,
 	})
 }
+
+func (h *Handler) CreateEmployee(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		http.Error(w, "Ошибка чтения формы", http.StatusBadRequest)
+		return
+	}
+	fullName := r.FormValue("full_name")
+	if fullName == "" {
+		http.Error(w, "ФИО обязательно", http.StatusBadRequest)
+		return
+	}
+	wpStr := r.FormValue("workplace_id")
+	emp := domain.Employee{
+		FullName:   fullName,
+		Position:   r.FormValue("position"),
+		Department: r.FormValue("department"),
+		WorkPhone:  r.FormValue("work_phone"),
+		Email:      r.FormValue("email"),
+		Equipment:  r.FormValue("equipment"),
+	}
+	if wpStr == "" {
+		emp.WorkplaceID = nil
+	} else if wpID, err := strconv.Atoi(wpStr); err == nil {
+		id := uint(wpID)
+		emp.WorkplaceID = &id
+	}
+
+	if err := h.db.Create(&emp).Error; err != nil {
+		http.Error(w, "Ошибка создания сотрудника: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if emp.WorkplaceID != nil {
+		h.db.Preload("Workplace").First(&emp, emp.ID)
+	}
+	emp.CanEdit = true
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":  true,
+		"employee": emp,
+	})
+}
