@@ -1,18 +1,18 @@
-{% load static %}<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PTracker — Конструктор карт этажей</title>
-    <link rel="stylesheet" href="{% static 'tracker/css/tracker.css' %}">
-    <link rel="stylesheet" href="{% static 'tracker/css/constructor.css' %}">
+    <link rel="stylesheet" href="/static/css/tracker.css">
+    <link rel="stylesheet" href="/static/css/constructor.css">
 </head>
 <body class="editor-body">
 <div class="editor-app">
     <!-- Верхняя панель -->
     <header class="editor-header">
         <div class="editor-header__left">
-            <a href="{% url 'index' %}#map" class="btn btn--ghost" style="text-decoration:none">
+            <a href="/" class="btn btn--ghost" style="text-decoration:none">
                 <svg viewBox="0 0 24 24" class="btn__icon"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
                 <span>В трекер</span>
             </a>
@@ -170,7 +170,10 @@
     <button class="btn btn--action cookie-banner__btn" id="cookieAcceptBtn" type="button">Звучит честно!</button>
 </aside>
 
-{{ constructor_config|json_script:"constructor-config" }}
-<script src="{% static 'tracker/js/constructor.js' %}"></script>
+<script id="constructor-config" type="application/json">
+    {{ .ConstructorConfigJSON }}
+</script>
+
+<script src="/static/js/constructor.js"></script>
 </body>
 </html>
