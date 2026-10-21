@@ -1,0 +1,1642 @@
+(function () {
+    'use strict';
+
+    const CONFIG = JSON.parse(document.getElementById('tracker-config').textContent);
+    const STORAGE_KEY = 'ptracker.tasks.v4';
+    const KEY_PREFIX = 'PT';
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+
+    const AVATAR_COLORS = ['#0077ff', '#fc3f1d', '#6b3fd4', '#24803c', '#ff9900', '#00a3bf'];
+
+    const byId = (list) => Object.fromEntries(list.map((x) => [String(x.id), x]));
+    const assigneesById = byId(CONFIG.assignees);
+    const prioritiesById = byId(CONFIG.priorities);
+    const severitiesById = byId(CONFIG.severities);
+    const floorsById = byId(CONFIG.floors);
+    const workplaces = CONFIG.floors.flatMap((f) => f.workplaces);
+    const workplacesById = byId(workplaces);
+
+    const priorityOrder = Object.fromEntries(CONFIG.priorities.map((p, i) => [p.id, i]));
+    const severityOrder = Object.fromEntries(CONFIG.severities.map((s, i) => [s.id, i]));
+
+    // ---------- Получение CSRF токена ----------
+    function getCsrfToken() {
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue || '';
+    }
+
+    function parseHashView() {
+        if (location.hash === '#map') return 'map';
+        if (location.hash === '#employees') return 'employees';
+        return 'board';
+    }
+
+    // ---------- Состояние ----------
+    const state = {
+        tasks: loadTasks(),
+        filters: { assignee: '', priority: '', severity: '', query: '' },
+        empFilters: { dept: '', workplace: '', floor: '', query: '' },
+        view: parseHashView(),
+        floor: String(CONFIG.floors[0]?.id || 1),
+        selectedPlace: null,
+        employees: CONFIG.employees || [],
+        departments: CONFIG.departments || [],
+        workplaces: CONFIG.workplaces || [],
+        auth: CONFIG.auth || { is_authenticated: false, username: '', is_admin: false },
+        selectedEmployee: null,
+    };
+
+    function loadTasks() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) return JSON.parse(raw);
+        } catch (e) { /* повреждённые данные — начинаем с демо */ }
+        localStorage.removeItem('ptracker.tasks.v1');
+        localStorage.removeItem('ptracker.tasks.v2');
+        localStorage.removeItem('ptracker.tasks.v3');
+        return seedTasks();
+    }
+
+    function saveTasks() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
+    }
+
+    function seedTasks() {
+        const now = Date.now();
+        const t = (id, title, description, workplace, creator, assignee, status, priority, severity) =>
+            ({ id, title, description, workplace, creator, assignee, status, priority, severity, createdAt: now });
+        return [
+            t(1, 'Перегрев стойки R2', 'Температура на входе 34°C, сработал алерт мониторинга.', '3-07', 'Мониторинг Zabbix', '2', 'in_progress', 'blocker', 's1'),
+            t(2, 'Не печатает МФУ', 'Ошибка «Замятие бумаги», хотя бумаги внутри нет.', '5-13', 'Игорь Чепель', '1', 'open', 'high', 's2'),
+            t(3, 'Нет доступа к 1С', 'После обновления пароля не пускает в базу.', '5-04', 'Елена Петрова', '1', 'open', 'critical', 's2'),
+            t(4, 'Мерцает монитор', '', '9-05', 'Артём Семёнов', '2', 'open', 'normal', 's3'),
+            t(5, 'Не работает ВКС в «Казани»', 'Камера не определяется в Телемосте.', '9-13', 'Никита Лебедев', '2', 'review', 'high', 's3'),
+            t(6, 'Установить второй монитор', 'Запрос от директора.', '3-01', 'Виктор Макаров', '1', 'open', 'low', 's4'),
+            t(7, 'Заменить клавиатуру', '', '5-01', 'Анна Смирнова', '1', 'closed', 'low', 's4'),
+        ];
+    }
+
+    function nextId() {
+        return state.tasks.reduce((max, t) => Math.max(max, t.id), 0) + 1;
+    }
+
+    // ---------- Утилиты ----------
+    function el(tag, attrs = {}, children = []) {
+        const node = document.createElement(tag);
+        setAttrs(node, attrs);
+        [].concat(children).forEach((c) => c != null && node.append(c));
+        return node;
+    }
+
+    function svg(tag, attrs = {}, children = []) {
+        const node = document.createElementNS(SVG_NS, tag);
+        setAttrs(node, attrs);
+        [].concat(children).forEach((c) => c != null && node.append(c));
+        return node;
+    }
+
+    function setAttrs(node, attrs) {
+        for (const [k, v] of Object.entries(attrs)) {
+            if (v == null) continue;
+            if (k === 'class') node.setAttribute('class', v);
+            else if (k === 'text') node.textContent = v;
+            else if (k === 'html') node.innerHTML = v;
+            else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+            else node.setAttribute(k, v);
+        }
+    }
+
+    function initials(name) {
+        return name.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase();
+    }
+
+    function shortName(name) {
+        const [first, last] = name.split(/\s+/);
+        return last ? `${first[0]}. ${last}` : name;
+    }
+
+    function placeTitle(wp) {
+        return wp.employee || wp.label || wp.room;
+    }
+
+    function isOpen(task) {
+        return task.status !== 'closed';
+    }
+
+    function avatar(assigneeId) {
+        const user = assigneesById[assigneeId];
+        if (!user) return el('span', { class: 'avatar avatar--empty', title: 'Не назначен', text: '?' });
+        const color = AVATAR_COLORS[(Number(user.id) - 1) % AVATAR_COLORS.length];
+        return el('span', { class: 'avatar', title: user.role ? `${user.name} · ${user.role}` : user.name, style: `background:${color}`, text: initials(user.name) });
+    }
+
+    const PRIO_ICON = {
+        blocker: '<svg class="prio-icon" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.5 9.5l7-7" stroke="currentColor" stroke-width="1.6"/></svg>',
+        critical: '<svg class="prio-icon" viewBox="0 0 12 12"><path d="M2 7l4-4 4 4M2 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+        high: '<svg class="prio-icon" viewBox="0 0 12 12"><path d="M2 8l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+        normal: '<svg class="prio-icon" viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.6"/></svg>',
+        low: '<svg class="prio-icon" viewBox="0 0 12 12"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+    };
+
+    // Иконки оборудования (контуры в сетке 24×24)
+    const KIND_ICON = {
+        pc: 'M3 4h18v12H3z M8 20h8 M12 16v4',
+        printer: 'M6 9V3h12v6 M6 18H4v-7h16v7h-2 M6 14h12v7H6z',
+        meeting: 'M3 6h12v12H3z M15 10l6-3v10l-6-3z',
+        server: 'M4 3h16v7H4z M4 14h16v7H4z M8 6.5h.01 M8 17.5h.01',
+    };
+    const KIND_NAME = { pc: 'Рабочее место', printer: 'Принтер', meeting: 'Переговорная', server: 'Серверная стойка' };
+
+    const PIN_ICON = '<svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>';
+
+    function priorityBadge(id) {
+        const p = prioritiesById[id];
+        if (!p) return null;
+        const b = el('span', { class: `badge prio-${id}`, title: `Priority: ${p.name}`, html: PRIO_ICON[id] || '' });
+        b.append(document.createTextNode(p.name));
+        return b;
+    }
+
+    function severityBadge(id) {
+        const s = severitiesById[id];
+        if (!s) return null;
+        return el('span', { class: `badge sev-${id}`, title: `Severity: ${s.name}`, text: id.toUpperCase() });
+    }
+
+    function fillSelect(select, items, { keepFirst = false } = {}) {
+        if (!keepFirst) select.innerHTML = '';
+        items.forEach((i) => select.append(el('option', { value: i.id, text: i.name })));
+    }
+
+    // ---------- Фильтрация ----------
+    function filtersActive() {
+        const f = state.filters;
+        return Boolean(f.assignee || f.priority || f.severity || f.query.trim());
+    }
+
+    function placeMatchesQuery(wp, q) {
+        return [wp.id, wp.employee, wp.label, wp.room].some((s) => s && s.toLowerCase().includes(q));
+    }
+
+    function filteredTasks() {
+        const { assignee, priority, severity, query } = state.filters;
+        const q = query.trim().toLowerCase();
+        return state.tasks.filter((t) => {
+            const wp = workplacesById[t.workplace];
+            return (!assignee || (assignee === 'none' ? !t.assignee : t.assignee === assignee)) &&
+                (!priority || t.priority === priority) &&
+                (!severity || t.severity === severity) &&
+                (!q || t.title.toLowerCase().includes(q) ||
+                    (t.description || '').toLowerCase().includes(q) ||
+                    (t.creator || '').toLowerCase().includes(q) ||
+                    `${KEY_PREFIX}-${t.id}`.toLowerCase().includes(q) ||
+                    (wp && placeMatchesQuery(wp, q)));
+        });
+    }
+
+    function worstSeverity(tasks) {
+        return tasks.reduce((worst, t) =>
+            (worst == null || severityOrder[t.severity] < severityOrder[worst]) ? t.severity : worst, null);
+    }
+
+    function sortByUrgency(a, b) {
+        return (severityOrder[a.severity] - severityOrder[b.severity]) ||
+            (priorityOrder[a.priority] - priorityOrder[b.priority]) || (b.id - a.id);
+    }
+
+    // ---------- Общий рендер ----------
+    const boardEl = document.getElementById('board');
+    const officeEl = document.getElementById('officeView');
+    const employeesViewEl = document.getElementById('employeesView');
+    const employeesGridEl = document.getElementById('employeesGrid');
+    const employeesEmptyEl = document.getElementById('employeesEmpty');
+
+    const taskFiltersEl = document.getElementById('taskFilters');
+    const employeeFiltersEl = document.getElementById('employeeFilters');
+    const filterEmpDeptEl = document.getElementById('filterEmpDept');
+    const filterEmpWorkplaceEl = document.getElementById('filterEmpWorkplace');
+    const filterEmpFloorEl = document.getElementById('filterEmpFloor');
+    const resetEmpFiltersEl = document.getElementById('resetEmpFilters');
+
+    const counterEl = document.getElementById('taskCounter');
+    const peopleEl = document.getElementById('peopleList');
+    const pageTitleEl = document.getElementById('pageTitle');
+    const toggleViewText = document.getElementById('toggleViewText');
+    const toggleViewBtn = document.getElementById('toggleViewBtn');
+    const createBtn = document.getElementById('createBtn');
+    const userPillEl = document.getElementById('userPill');
+
+    const employeeModalEl = document.getElementById('employeeModal');
+    const employeeDialogEl = document.getElementById('employeeDialog');
+    const loginModalEl = document.getElementById('loginModal');
+    const loginFormEl = document.getElementById('loginForm');
+    const loginErrorEl = document.getElementById('loginError');
+    const creatorListEl = document.getElementById('creatorList');
+
+    function render() {
+        hideHoverCard();
+        const isEmployees = state.view === 'employees';
+        const isMap = state.view === 'map';
+        const isBoard = state.view === 'board';
+
+        boardEl.hidden = !isBoard;
+        officeEl.hidden = !isMap;
+        if (employeesViewEl) employeesViewEl.hidden = !isEmployees;
+
+        if (taskFiltersEl) taskFiltersEl.hidden = isEmployees;
+        if (employeeFiltersEl) employeeFiltersEl.hidden = !isEmployees;
+
+        if (isEmployees) {
+            pageTitleEl.textContent = 'Сотрудники';
+            const empList = filteredEmployees();
+            counterEl.textContent = empList.length;
+            counterEl.title = 'Всего сотрудников';
+            toggleViewBtn.hidden = true;
+            if (state.auth.is_admin) {
+                createBtn.hidden = false;
+                createBtn.innerHTML = '<span class="btn__plus">+</span> Добавить сотрудника';
+            } else {
+                createBtn.hidden = true;
+            }
+            renderEmployees();
+        } else if (isMap) {
+            const tasks = filteredTasks();
+            pageTitleEl.textContent = 'Задачи на карте';
+            toggleViewText.textContent = 'Доска задач';
+            toggleViewBtn.hidden = false;
+            createBtn.hidden = false;
+            createBtn.innerHTML = '<span class="btn__plus">+</span> Создать задачу';
+            counterEl.textContent = tasks.filter(isOpen).length;
+            counterEl.title = 'Открытых задач';
+            renderMap(tasks);
+        } else {
+            const tasks = filteredTasks();
+            pageTitleEl.textContent = 'Задачи';
+            toggleViewText.textContent = 'Задачи на карте';
+            toggleViewBtn.hidden = false;
+            createBtn.hidden = false;
+            createBtn.innerHTML = '<span class="btn__plus">+</span> Создать задачу';
+            counterEl.textContent = tasks.length;
+            counterEl.title = 'Всего задач';
+            renderBoard(tasks);
+        }
+
+        document.querySelectorAll('.nav-item[data-view]').forEach((n) =>
+            n.classList.toggle('nav-item--active', n.dataset.view === state.view));
+
+        renderPeople();
+        renderUserPill();
+    }
+
+    // ---------- Доска ----------
+    function renderBoard(tasks) {
+        boardEl.innerHTML = '';
+        CONFIG.statuses.forEach((status) => {
+            const items = tasks
+                .filter((t) => t.status === status.id)
+                .sort((a, b) => (priorityOrder[a.priority] - priorityOrder[b.priority]) || (b.id - a.id));
+
+            const column = el('div', { class: 'column', 'data-status': status.id }, [
+                el('div', { class: 'column__header' }, [
+                    el('div', { class: 'column__title' }, [
+                        el('span', { class: `column__dot dot-${status.id}` }),
+                        el('span', { text: status.name }),
+                        el('span', { class: 'column__count', text: items.length }),
+                    ]),
+                    el('button', { class: 'column__add', type: 'button', title: 'Добавить задачу', text: '+', onclick: () => openModal(null, { status: status.id }) }),
+                ]),
+            ]);
+
+            if (!items.length) column.append(el('div', { class: 'column__empty', text: 'Нет задач' }));
+            items.forEach((t) => column.append(renderCard(t)));
+
+            attachDropZone(column);
+            boardEl.append(column);
+        });
+    }
+
+    function renderCard(task, { draggable = true, showPlace = true } = {}) {
+        const borderCls = ['blocker', 'critical', 'high'].includes(task.priority) ? ` border-${task.priority}` : '';
+        const wp = workplacesById[task.workplace];
+        const statusName = CONFIG.statuses.find((s) => s.id === task.status)?.name;
+
+        const card = el('article', {
+            class: `card${borderCls}${task.status === 'closed' ? ' card--closed' : ''}`,
+            draggable: draggable ? 'true' : null,
+            'data-id': task.id,
+            onclick: () => openModal(task),
+        }, [
+            el('div', { class: 'card__top' }, [
+                el('span', { class: 'card__key', text: `${KEY_PREFIX}-${task.id}` }),
+                showPlace && wp
+                    ? el('span', { class: 'card__place', title: `${wp.room} · ${placeTitle(wp)}`, html: PIN_ICON }, [document.createTextNode(wp.id)])
+                    : (!showPlace ? el('span', { class: 'panel__status-chip', text: statusName }) : null),
+            ]),
+            el('div', { class: 'card__title', text: task.title }),
+            task.description ? el('div', { class: 'card__desc', text: task.description }) : null,
+            task.creator ? el('div', { class: 'card__creator', title: `Создал: ${task.creator}` }, [
+                el('span', { class: 'card__creator-label', text: 'Создал:' }),
+                document.createTextNode(` ${task.creator}`),
+            ]) : null,
+            el('div', { class: 'card__meta' }, [
+                el('div', { class: 'card__tags' }, [priorityBadge(task.priority), severityBadge(task.severity)]),
+                avatar(task.assignee),
+            ]),
+        ]);
+
+        if (draggable) {
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', String(task.id));
+                e.dataTransfer.effectAllowed = 'move';
+                requestAnimationFrame(() => card.classList.add('card--dragging'));
+            });
+            card.addEventListener('dragend', () => card.classList.remove('card--dragging'));
+        }
+        return card;
+    }
+
+    function attachDropZone(column) {
+        column.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            column.classList.add('column--drop');
+        });
+        column.addEventListener('dragleave', (e) => {
+            if (!column.contains(e.relatedTarget)) column.classList.remove('column--drop');
+        });
+        column.addEventListener('drop', (e) => {
+            e.preventDefault();
+            column.classList.remove('column--drop');
+            const id = Number(e.dataTransfer.getData('text/plain'));
+            const task = state.tasks.find((t) => t.id === id);
+            if (task && task.status !== column.dataset.status) {
+                task.status = column.dataset.status;
+                saveTasks();
+                render();
+            }
+        });
+    }
+
+    function renderPeople() {
+        peopleEl.innerHTML = '';
+        CONFIG.assignees.forEach((u) => {
+            const id = String(u.id);
+            const count = state.tasks.filter((t) => t.assignee === id && isOpen(t)).length;
+            peopleEl.append(el('li', {
+                class: `person${state.filters.assignee === id ? ' person--active' : ''}`,
+                title: 'Показать задачи исполнителя',
+                onclick: () => {
+                    state.filters.assignee = state.filters.assignee === id ? '' : id;
+                    filterAssignee.value = state.filters.assignee;
+                    render();
+                },
+            }, [
+                avatar(id),
+                el('span', { class: 'person__name' }, [
+                    document.createTextNode(u.name),
+                    u.role ? el('span', { class: 'person__role', text: u.role }) : null,
+                ]),
+                el('span', { class: 'person__count', text: count }),
+            ]));
+        });
+    }
+
+    // ---------- Карта офиса ----------
+    const floorTabsEl = document.getElementById('floorTabs');
+    const floorSvg = document.getElementById('floorSvg');
+    const panelEl = document.getElementById('officePanel');
+    const deskHoverCardEl = document.getElementById('deskHoverCard');
+    const officeCanvasEl = document.getElementById('officeCanvas');
+
+    let hoverHideTimer = null;
+
+    if (deskHoverCardEl) {
+        deskHoverCardEl.addEventListener('mouseenter', () => clearTimeout(hoverHideTimer));
+        deskHoverCardEl.addEventListener('mouseleave', () => scheduleHideHoverCard());
+    }
+
+    function scheduleHideHoverCard(delay = 180) {
+        clearTimeout(hoverHideTimer);
+        hoverHideTimer = setTimeout(() => {
+            hideHoverCard();
+        }, delay);
+    }
+
+    function hideHoverCard() {
+        clearTimeout(hoverHideTimer);
+        if (!deskHoverCardEl) return;
+        deskHoverCardEl.classList.remove('desk-hover-card--visible');
+        deskHoverCardEl.hidden = true;
+    }
+
+    function findEmployeeForPlace(wp) {
+        if (!wp) return null;
+        const wpCode = (wp.code || wp.id || '').trim().toLowerCase();
+        const wpEmpName = (wp.employee || '').trim().toLowerCase();
+
+        // 1. По коду рабочего места (из модели Employee)
+        if (wpCode) {
+            const byCode = state.employees.find((e) =>
+                e.workplace && (e.workplace.code || '').trim().toLowerCase() === wpCode
+            );
+            if (byCode) return byCode;
+        }
+
+        // 2. По точному совпадению ФИО с wp.employee
+        if (wpEmpName) {
+            const byName = state.employees.find((e) =>
+                e.full_name && e.full_name.trim().toLowerCase() === wpEmpName
+            );
+            if (byName) return byName;
+
+            // 3. По совпадению частей имени (например "Виктор Макаров" и "Макаров Виктор Сергеевич")
+            const parts = wpEmpName.split(/\s+/).filter(Boolean);
+            if (parts.length >= 2) {
+                const byParts = state.employees.find((e) => {
+                    if (!e.full_name) return false;
+                    const eLow = e.full_name.toLowerCase();
+                    return parts.every((p) => eLow.includes(p));
+                });
+                if (byParts) return byParts;
+            }
+        }
+
+        // 4. Если на месте подписан сотрудник, но в базе нет полного профиля
+        if (wp.employee && wp.employee.trim()) {
+            return {
+                id: null,
+                full_name: wp.employee.trim(),
+                initials: initials(wp.employee.trim()),
+                photo_url: null,
+                position: wp.label || '',
+                department: wp.room || '',
+                work_phone: '',
+                email: '',
+                workplace: { code: wp.id, room: wp.room },
+            };
+        }
+
+        return null;
+    }
+
+    function getTasksCreatedByEmployee(emp, wp) {
+        const candidates = new Set();
+        if (emp && emp.full_name) {
+            candidates.add(emp.full_name.trim().toLowerCase());
+            const parts = emp.full_name.trim().split(/\s+/).filter(Boolean);
+            if (parts.length >= 2) {
+                candidates.add(`${parts[0]} ${parts[1]}`.toLowerCase());
+                candidates.add(`${parts[1]} ${parts[0]}`.toLowerCase());
+            }
+        }
+        if (wp && wp.employee) {
+            candidates.add(wp.employee.trim().toLowerCase());
+            const parts = wp.employee.trim().split(/\s+/).filter(Boolean);
+            if (parts.length >= 2) {
+                candidates.add(`${parts[0]} ${parts[1]}`.toLowerCase());
+                candidates.add(`${parts[1]} ${parts[0]}`.toLowerCase());
+            }
+        }
+
+        if (!candidates.size) return [];
+
+        return state.tasks.filter((t) => {
+            if (!t.creator) return false;
+            const c = t.creator.trim().toLowerCase();
+            for (const cand of candidates) {
+                if (c === cand || c.includes(cand) || cand.includes(c)) {
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
+
+    function showDeskHoverCard(wp, deskNode) {
+        if (!deskHoverCardEl || !officeCanvasEl) return;
+        clearTimeout(hoverHideTimer);
+
+        const emp = findEmployeeForPlace(wp);
+        // Задачи на карте привязаны к рабочему месту, а не к сотруднику
+        const placeTasks = state.tasks.filter((t) => t.workplace === wp.id || (wp.code && t.workplace === wp.code));
+        const sortedTasks = placeTasks.slice().sort(sortByUrgency);
+        const openTasks = sortedTasks.filter(isOpen);
+
+        deskHoverCardEl.innerHTML = '';
+
+        // --- Левая колонка: краткая карточка сотрудника ---
+        const leftCol = el('div', {
+            class: `desk-hover-card__left${emp && emp.id ? ' desk-hover-card__left--clickable' : ''}`,
+            title: emp && emp.id ? 'Нажмите, чтобы открыть карточку сотрудника' : '',
+            onclick: (e) => {
+                if (emp && emp.id) {
+                    e.stopPropagation();
+                    hideHoverCard();
+                    openEmployeeModal(emp);
+                }
+            }
+        });
+
+        // Аватар / Фото
+        let avatarEl;
+        if (emp && emp.photo_url) {
+            avatarEl = el('img', {
+                class: 'desk-hover-card__avatar',
+                src: emp.photo_url,
+                alt: emp.full_name || 'Фото сотрудника'
+            });
+        } else {
+            const empInitials = (emp && (emp.initials || initials(emp.full_name))) || (wp.label ? initials(wp.label) : (wp.id || '—'));
+            const colorIdx = emp && emp.id ? Number(emp.id) : (wp.id ? wp.id.charCodeAt(0) : 0);
+            const bgColor = AVATAR_COLORS[Math.abs(colorIdx) % AVATAR_COLORS.length];
+            avatarEl = el('div', {
+                class: 'desk-hover-card__avatar desk-hover-card__avatar--placeholder',
+                style: `background: ${bgColor}`,
+                text: empInitials
+            });
+        }
+
+        const wpPill = el('span', { class: 'desk-hover-card__place-pill', text: `Место ${wp.id}` });
+        const avatarRow = el('div', { class: 'desk-hover-card__avatar-row' }, [avatarEl, wpPill]);
+
+        // ФИО
+        const empName = (emp && emp.full_name) || wp.employee || `Рабочее место ${wp.id}`;
+        const nameEl = el('div', { class: 'desk-hover-card__emp-name', text: empName });
+
+        // Должность и отдел
+        const empPos = (emp && emp.position) || (wp.label ? wp.label : (emp ? '' : 'Рабочее место'));
+        const posEl = empPos ? el('div', { class: 'desk-hover-card__emp-pos', text: empPos }) : null;
+        const empDept = (emp && emp.department) || wp.room;
+        const deptEl = empDept ? el('div', { class: 'desk-hover-card__emp-dept', text: empDept }) : null;
+
+        // Контакты
+        const phoneIcon = '<svg class="desk-hover-card__icon" viewBox="0 0 24 24"><path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57a1 1 0 01-.24 1.02l-2.21 2.2z"/></svg>';
+        const emailIcon = '<svg class="desk-hover-card__icon" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>';
+
+        const phoneVal = emp && emp.work_phone ? emp.work_phone : '';
+        const phoneItem = el('div', {
+            class: `desk-hover-card__contact${!phoneVal ? ' desk-hover-card__contact--muted' : ''}`,
+            title: phoneVal ? `Телефон: ${phoneVal}` : 'Телефон не указан',
+            html: phoneIcon
+        }, [el('span', { text: phoneVal || 'Телефон не указан' })]);
+
+        const emailVal = emp && emp.email ? emp.email : '';
+        const emailItem = el('div', {
+            class: `desk-hover-card__contact${!emailVal ? ' desk-hover-card__contact--muted' : ''}`,
+            title: emailVal ? `E-mail: ${emailVal}` : 'Почта не указана',
+            html: emailIcon
+        }, [el('span', { text: emailVal || 'Почта не указана' })]);
+
+        const contactsEl = el('div', { class: 'desk-hover-card__contacts' }, [phoneItem, emailItem]);
+
+        leftCol.append(avatarRow, nameEl);
+        if (posEl) leftCol.append(posEl);
+        if (deptEl) leftCol.append(deptEl);
+        leftCol.append(contactsEl);
+
+        // --- Правая колонка: задачи, привязанные к этому рабочему месту ---
+        const rightCol = el('div', { class: 'desk-hover-card__right' });
+
+        const headTitle = el('span', { class: 'desk-hover-card__title', text: `Задачи места ${wp.id}` });
+        const countChip = el('span', {
+            class: `desk-hover-card__count${openTasks.length ? ' desk-hover-card__count--active' : ''}`,
+            title: openTasks.length ? `Открытых задач: ${openTasks.length} из ${sortedTasks.length}` : 'Все задачи закрыты',
+            text: sortedTasks.length
+        });
+        const headerEl = el('div', { class: 'desk-hover-card__header' }, [headTitle, countChip]);
+        rightCol.append(headerEl);
+
+        if (sortedTasks.length > 0) {
+            const tasksList = el('div', { class: 'desk-hover-card__tasks' });
+            sortedTasks.forEach((t) => {
+                const statusName = CONFIG.statuses.find((s) => s.id === t.status)?.name || t.status;
+                const taskRow = el('div', {
+                    class: `desk-hover-card__task${t.status === 'closed' ? ' desk-hover-card__task--closed' : ''}`,
+                    title: `Открыть задачу ${KEY_PREFIX}-${t.id}`,
+                    onclick: (e) => {
+                        e.stopPropagation();
+                        hideHoverCard();
+                        openModal(t);
+                    }
+                }, [
+                    el('div', { class: 'desk-hover-card__task-top' }, [
+                        el('span', { class: 'desk-hover-card__task-key', text: `${KEY_PREFIX}-${t.id}` }),
+                        el('div', { class: 'desk-hover-card__task-badges' }, [
+                            severityBadge(t.severity),
+                            priorityBadge(t.priority),
+                            el('span', { class: 'panel__status-chip', text: statusName })
+                        ])
+                    ]),
+                    el('div', { class: 'desk-hover-card__task-title', text: t.title }),
+                    t.creator ? el('div', { class: 'desk-hover-card__task-creator', text: `Создал: ${t.creator}` }) : null
+                ]);
+                tasksList.append(taskRow);
+            });
+            rightCol.append(tasksList);
+        } else {
+            rightCol.append(el('div', { class: 'desk-hover-card__empty' }, [
+                el('div', { class: 'desk-hover-card__empty-icon', text: '🎉' }),
+                el('div', { text: 'На этом месте нет задач' }),
+                el('div', { style: 'font-size: 11px; color: var(--text-secondary);', text: 'Всё работает исправно' })
+            ]));
+        }
+
+        deskHoverCardEl.append(leftCol, rightCol);
+
+        deskHoverCardEl.hidden = false;
+        positionHoverCard(deskNode);
+        requestAnimationFrame(() => {
+            deskHoverCardEl.classList.add('desk-hover-card--visible');
+        });
+    }
+
+    function positionHoverCard(deskNode) {
+        if (!deskHoverCardEl || !officeCanvasEl || !deskNode) return;
+
+        const deskRect = deskNode.getBoundingClientRect();
+        const canvasRect = officeCanvasEl.getBoundingClientRect();
+
+        const cardWidth = deskHoverCardEl.offsetWidth || 530;
+        const cardHeight = deskHoverCardEl.offsetHeight || 220;
+
+        const deskCenterX = (deskRect.left + deskRect.width / 2) - canvasRect.left;
+        const deskTop = deskRect.top - canvasRect.top;
+        const deskBottom = deskRect.bottom - canvasRect.top;
+
+        // По горизонтали: центрируем над местом
+        let left = deskCenterX - cardWidth / 2;
+        const padding = 12;
+        if (left < padding) left = padding;
+        if (left + cardWidth > canvasRect.width - padding) {
+            left = Math.max(padding, canvasRect.width - cardWidth - padding);
+        }
+
+        // По вертикали: пробуем сверху, иначе снизу
+        let top = deskTop - cardHeight - 12;
+        if (top < padding) {
+            top = deskBottom + 12;
+            if (top + cardHeight > canvasRect.height - padding) {
+                top = Math.max(padding, canvasRect.height - cardHeight - padding);
+            }
+        }
+
+        deskHoverCardEl.style.left = `${Math.round(left)}px`;
+        deskHoverCardEl.style.top = `${Math.round(top)}px`;
+    }
+
+    function openTasksByPlace(tasks) {
+        const map = {};
+        tasks.filter(isOpen).forEach((t) => {
+            if (!t.workplace) return;
+            (map[t.workplace] ||= []).push(t);
+        });
+        return map;
+    }
+
+    function renderMap(tasks) {
+        const byPlace = openTasksByPlace(tasks);
+        const floor = floorsById[state.floor];
+
+        // Вкладки этажей с количеством открытых задач
+        floorTabsEl.innerHTML = '';
+        CONFIG.floors.forEach((f) => {
+            const count = f.workplaces.reduce((n, wp) => n + (byPlace[wp.id]?.length || 0), 0);
+            floorTabsEl.append(el('button', {
+                class: `floor-tab${String(f.id) === state.floor ? ' floor-tab--active' : ''}`,
+                type: 'button',
+                role: 'tab',
+                onclick: () => { state.floor = String(f.id); state.selectedPlace = null; render(); },
+            }, [
+                el('span', { text: f.name }),
+                count ? el('span', { class: 'floor-tab__count', text: count }) : null,
+            ]));
+        });
+
+        // Кнопка перехода в редактор текущего этажа
+        const editFloorBtn = document.getElementById('editFloorBtn');
+        if (editFloorBtn) {
+            editFloorBtn.href = `/constructor/${floor.id}/`;
+        }
+
+        // План этажа: стены и подписи (из БД) или прямоугольники (fallback)
+        floorSvg.innerHTML = '';
+        if (floor.walls && floor.walls.length) {
+            const wallsGroup = svg('g', { class: 'floor__walls' });
+            floor.walls.forEach((w) => {
+                wallsGroup.append(svg('line', {
+                    class: 'wall-line',
+                    x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2
+                }));
+            });
+            floorSvg.append(wallsGroup);
+        } else if (floor.rooms) {
+            floor.rooms.forEach((r) => {
+                floorSvg.append(svg('g', { class: `room${r.name === 'Серверная' ? ' room--server' : ''}` }, [
+                    svg('rect', { class: 'room__rect', x: r.x, y: r.y, width: r.w, height: r.h, rx: 14 }),
+                    svg('text', { class: 'room__label', x: r.x + 16, y: r.y + 26, text: r.name }),
+                ]));
+            });
+        }
+
+        if (floor.labels && floor.labels.length) {
+            const labelsGroup = svg('g', { class: 'floor__labels' });
+            floor.labels.forEach((l) => {
+                labelsGroup.append(svg('text', {
+                    class: 'room__label',
+                    x: l.x,
+                    y: l.y,
+                    text: l.text
+                }));
+            });
+            floorSvg.append(labelsGroup);
+        }
+
+        const q = state.filters.query.trim().toLowerCase();
+        const active = filtersActive();
+
+        floor.workplaces.forEach((wp) => {
+            const open = byPlace[wp.id] || [];
+            const worst = worstSeverity(open);
+            const status = worst ? `st-${worst}` : 'st-ok';
+            const dimmed = active && !open.length && !(q && placeMatchesQuery(wp, q));
+            const selected = state.selectedPlace === wp.id;
+            const w = 72, h = 48;
+
+            const g = svg('g', {
+                class: `desk ${status}${selected ? ' desk--selected' : ''}${dimmed ? ' desk--dimmed' : ''}`,
+                tabindex: 0,
+                role: 'button',
+                'aria-label': `${wp.id} ${placeTitle(wp)}`,
+                onclick: () => { hideHoverCard(); selectPlace(wp.id); },
+                onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hideHoverCard(); selectPlace(wp.id); } },
+            }, [
+                worst === 's1' ? svg('rect', { class: 'desk__pulse', x: wp.x - w / 2, y: wp.y - h / 2, width: w, height: h, rx: 10 }) : null,
+                svg('rect', { class: 'desk__body', x: wp.x - w / 2, y: wp.y - h / 2, width: w, height: h, rx: 10 }),
+                svg('path', { class: 'desk__icon', d: KIND_ICON[wp.kind] || KIND_ICON.pc, transform: `translate(${wp.x - 10} ${wp.y - 21}) scale(0.84)` }),
+                svg('text', { class: 'desk__id', x: wp.x, y: wp.y + 17, text: wp.id }),
+                svg('text', { class: 'desk__name', x: wp.x, y: wp.y + h / 2 + 18, text: wp.label || '' }),
+                open.length ? svg('g', { class: 'desk__badge' }, [
+                    svg('circle', { cx: wp.x + w / 2 - 2, cy: wp.y - h / 2 + 2, r: 11 }),
+                    svg('text', { x: wp.x + w / 2 - 2, y: wp.y - h / 2 + 2, text: open.length }),
+                ]) : null,
+            ]);
+            g.addEventListener('mouseenter', () => showDeskHoverCard(wp, g));
+            g.addEventListener('mouseleave', () => scheduleHideHoverCard());
+            floorSvg.append(g);
+        });
+
+        renderPanel(tasks, byPlace, floor);
+    }
+
+    function selectPlace(id) {
+        state.selectedPlace = state.selectedPlace === id ? null : id;
+        render();
+    }
+
+    function renderPanel(tasks, byPlace, floor) {
+        panelEl.innerHTML = '';
+        const wp = workplacesById[state.selectedPlace];
+
+        if (!wp) {
+            // Сводка по этажу: проблемные места
+            const problems = floor.workplaces
+                .filter((p) => byPlace[p.id]?.length)
+                .sort((a, b) => severityOrder[worstSeverity(byPlace[a.id])] - severityOrder[worstSeverity(byPlace[b.id])]);
+
+            panelEl.append(el('div', {}, [
+                el('h3', { class: 'panel__title', text: floor.name }),
+                el('div', { class: 'panel__sub', text: `Мест: ${floor.workplaces.length} · с проблемами: ${problems.length}` }),
+            ]));
+
+            if (!problems.length) {
+                panelEl.append(el('div', { class: 'panel__ok', text: 'На этаже всё работает 🎉' }));
+            } else {
+                panelEl.append(el('div', { class: 'panel__section-title', text: 'Где что не работает' }));
+                const list = el('div', { class: 'panel__list' });
+                problems.forEach((p) => {
+                    const open = byPlace[p.id];
+                    const worst = worstSeverity(open);
+                    list.append(el('div', { class: 'card', onclick: () => selectPlace(p.id) }, [
+                        el('div', { class: 'card__top' }, [
+                            el('span', { class: 'card__key', text: p.id }),
+                            severityBadge(worst),
+                        ]),
+                        el('div', { class: 'card__title', text: placeTitle(p) }),
+                        el('div', { class: 'card__desc', text: open.slice().sort(sortByUrgency).map((t) => t.title).join(' · ') }),
+                    ]));
+                });
+                panelEl.append(list);
+            }
+            panelEl.append(el('div', { class: 'panel__empty' }, [
+                el('div', { text: 'Нажмите на рабочее место на карте, чтобы увидеть его задачи' }),
+            ]));
+            return;
+        }
+
+        const open = (byPlace[wp.id] || []).slice().sort(sortByUrgency);
+        const closed = tasks.filter((t) => t.workplace === wp.id && !isOpen(t));
+        const worst = worstSeverity(open);
+
+        panelEl.append(el('div', { class: 'panel__head' }, [
+            el('div', { class: `panel__status ${worst ? `st-${worst}` : 'st-ok'}`, html: `<svg viewBox="0 0 24 24"><path d="${KIND_ICON[wp.kind] || KIND_ICON.pc}"/></svg>` }),
+            el('div', {}, [
+                el('h3', { class: 'panel__title', text: `${wp.id} · ${placeTitle(wp)}` }),
+                el('div', { class: 'panel__sub', text: `${KIND_NAME[wp.kind] || 'Рабочее место'} · ${wp.room} · ${floorsById[wp.floor].name}` }),
+            ]),
+            el('button', { class: 'icon-btn', type: 'button', title: 'Закрыть', text: '×', style: 'margin-left:auto', onclick: () => selectPlace(wp.id) }),
+        ]));
+
+        panelEl.append(el('div', { class: 'panel__section-title', text: `Открытые задачи · ${open.length}` }));
+        if (open.length) {
+            panelEl.append(el('div', { class: 'panel__list' }, open.map((t) => renderCard(t, { draggable: false, showPlace: false }))));
+        } else {
+            panelEl.append(el('div', { class: 'panel__ok', text: 'Всё работает' }));
+        }
+
+        if (closed.length) {
+            panelEl.append(el('div', { class: 'panel__section-title', text: `Закрытые · ${closed.length}` }));
+            panelEl.append(el('div', { class: 'panel__list' }, closed.map((t) => renderCard(t, { draggable: false, showPlace: false }))));
+        }
+
+        panelEl.append(el('button', {
+            class: 'btn btn--action', type: 'button',
+            onclick: () => openModal(null, { workplace: wp.id }),
+        }, [el('span', { class: 'btn__plus', text: '+' }), document.createTextNode(' Задача на это место')]));
+    }
+
+    // ---------- Модальное окно ----------
+    const modal = document.getElementById('taskModal');
+    const form = document.getElementById('taskForm');
+    const modalTitle = document.getElementById('modalTitle');
+    const saveBtn = document.getElementById('saveBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+
+    fillSelect(form.assignee, [{ id: '', name: 'Не назначен' }, ...CONFIG.assignees]);
+    fillSelect(form.status, CONFIG.statuses);
+    fillSelect(form.priority, CONFIG.priorities);
+    fillSelect(form.severity, CONFIG.severities);
+
+    // Рабочие места сгруппированы по этажам
+    form.workplace.append(el('option', { value: '', text: 'Не указано' }));
+    CONFIG.floors.forEach((f) => {
+        form.workplace.append(el('optgroup', { label: f.name },
+            f.workplaces.map((wp) => el('option', { value: wp.id, text: `${wp.id} · ${placeTitle(wp)} (${wp.room})` }))));
+    });
+
+    function openModal(task, preset = {}) {
+        form.reset();
+        const isEdit = Boolean(task);
+        modalTitle.textContent = isEdit ? `${KEY_PREFIX}-${task.id}` : 'Новая задача';
+        saveBtn.textContent = isEdit ? 'Сохранить' : 'Создать';
+        deleteBtn.hidden = !isEdit;
+
+        const initialWorkplace = isEdit ? (task.workplace || '') : (preset.workplace || '');
+        const initialCreator = isEdit ? (task.creator || '') : (preset.creator || '');
+
+        form.id.value = isEdit ? task.id : '';
+        form.title.value = isEdit ? task.title : '';
+        form.description.value = isEdit ? task.description : '';
+        if (form.creator) form.creator.value = initialCreator;
+        form.workplace.value = initialWorkplace;
+        form.assignee.value = isEdit ? (task.assignee || '') : '';
+        form.status.value = isEdit ? task.status : (preset.status || CONFIG.statuses[0].id);
+        form.priority.value = isEdit ? task.priority : 'normal';
+        form.severity.value = isEdit ? task.severity : 's3';
+
+        modal.hidden = false;
+        setTimeout(() => form.title.focus(), 0);
+    }
+
+    function closeModal() {
+        modal.hidden = true;
+    }
+
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const data = {
+            title: form.title.value.trim(),
+            description: form.description.value.trim(),
+            creator: form.creator ? form.creator.value.trim() : '',
+            workplace: form.workplace.value,
+            assignee: form.assignee.value,
+            status: form.status.value,
+            priority: form.priority.value,
+            severity: form.severity.value,
+        };
+        if (!data.title) { form.title.focus(); return; }
+
+        const id = Number(form.id.value);
+        if (id) {
+            Object.assign(state.tasks.find((t) => t.id === id), data);
+        } else {
+            state.tasks.push({ id: nextId(), createdAt: Date.now(), ...data });
+        }
+        saveTasks();
+        closeModal();
+        render();
+    });
+
+    deleteBtn.addEventListener('click', () => {
+        const id = Number(form.id.value);
+        if (!id || !confirm(`Удалить задачу ${KEY_PREFIX}-${id}?`)) return;
+        state.tasks = state.tasks.filter((t) => t.id !== id);
+        saveTasks();
+        closeModal();
+        render();
+    });
+
+    modal.querySelectorAll('[data-close]').forEach((n) => n.addEventListener('click', closeModal));
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            hideHoverCard();
+            if (!modal.hidden) closeModal();
+        }
+    });
+    window.addEventListener('scroll', hideHoverCard, { passive: true });
+    window.addEventListener('resize', hideHoverCard, { passive: true });
+
+    // ---------- Фильтры и поиск ----------
+    const filterAssignee = document.getElementById('filterAssignee');
+    const filterPriority = document.getElementById('filterPriority');
+    const filterSeverity = document.getElementById('filterSeverity');
+    const searchInput = document.getElementById('searchInput');
+
+    fillSelect(filterAssignee, [...CONFIG.assignees, { id: 'none', name: 'Не назначен' }], { keepFirst: true });
+    fillSelect(filterPriority, CONFIG.priorities, { keepFirst: true });
+    fillSelect(filterSeverity, CONFIG.severities, { keepFirst: true });
+
+    filterAssignee.addEventListener('change', () => { state.filters.assignee = filterAssignee.value; render(); });
+    filterPriority.addEventListener('change', () => { state.filters.priority = filterPriority.value; render(); });
+    filterSeverity.addEventListener('change', () => { state.filters.severity = filterSeverity.value; render(); });
+    searchInput.addEventListener('input', () => { state.filters.query = searchInput.value; render(); });
+
+    document.getElementById('resetFilters').addEventListener('click', () => {
+        state.filters = { assignee: '', priority: '', severity: '', query: '' };
+        filterAssignee.value = filterPriority.value = filterSeverity.value = searchInput.value = '';
+        render();
+    });
+
+    // ---------- ЛОГИКА СОТРУДНИКОВ ----------
+
+    function filteredEmployees() {
+        let list = state.employees;
+        const q = (state.empFilters.query || (state.view === 'employees' ? state.filters.query : '')).trim().toLowerCase();
+        if (q) {
+            list = list.filter((e) => {
+                return (e.full_name && e.full_name.toLowerCase().includes(q)) ||
+                       (e.position && e.position.toLowerCase().includes(q)) ||
+                       (e.department && e.department.toLowerCase().includes(q)) ||
+                       (e.email && e.email.toLowerCase().includes(q)) ||
+                       (e.work_phone && e.work_phone.toLowerCase().includes(q)) ||
+                       (e.workplace && e.workplace.code.toLowerCase().includes(q)) ||
+                       (e.equipment && e.equipment.toLowerCase().includes(q));
+            });
+        }
+        if (state.empFilters.dept) {
+            list = list.filter((e) => e.department === state.empFilters.dept);
+        }
+        if (state.empFilters.workplace === 'assigned') {
+            list = list.filter((e) => Boolean(e.workplace));
+        } else if (state.empFilters.workplace === 'unassigned') {
+            list = list.filter((e) => !e.workplace);
+        }
+        if (state.empFilters.floor) {
+            list = list.filter((e) => e.workplace && String(e.workplace.floor_id) === String(state.empFilters.floor));
+        }
+        return list;
+    }
+
+    function renderEmployees() {
+        if (!employeesGridEl) return;
+        const list = filteredEmployees();
+        employeesGridEl.innerHTML = '';
+
+        if (list.length === 0) {
+            if (employeesEmptyEl) employeesEmptyEl.hidden = false;
+            return;
+        }
+        if (employeesEmptyEl) employeesEmptyEl.hidden = true;
+
+        list.forEach((emp) => {
+            const card = el('article', { class: 'emp-card', 'data-id': String(emp.id) });
+
+            // Аватар
+            let avatarEl;
+            if (emp.photo_url) {
+                avatarEl = el('img', { class: 'emp-avatar', src: emp.photo_url, alt: emp.full_name });
+            } else {
+                avatarEl = el('div', { class: 'emp-avatar emp-avatar--placeholder', text: emp.initials || '—' });
+            }
+
+            const headMain = el('div', { class: 'emp-card__main' }, [
+                el('h3', { class: 'emp-card__name', text: emp.full_name }),
+                el('div', { class: 'emp-card__pos', text: emp.position || 'Должность не указана' }),
+                emp.department ? el('span', { class: 'emp-card__dept', text: emp.department }) : null,
+            ].filter(Boolean));
+
+            const head = el('div', { class: 'emp-card__head' }, [avatarEl, headMain]);
+
+            // Рабочее место
+            let wpBlock;
+            if (emp.workplace) {
+                wpBlock = el('div', { class: 'emp-card__workplace emp-card__workplace--assigned' }, [
+                    el('span', { text: `📍 ${emp.workplace.code} · ${emp.workplace.floor_name || ''} ${emp.workplace.room ? '(' + emp.workplace.room + ')' : ''}`.trim() })
+                ]);
+            } else {
+                // Если рабочее место не задано, укажи, что "Не задано"
+                wpBlock = el('div', { class: 'emp-card__workplace emp-card__workplace--unassigned' }, [
+                    el('span', { text: '📍 Не задано' })
+                ]);
+            }
+
+            // Контакты
+            const contactItems = [];
+            if (emp.work_phone) {
+                contactItems.push(el('div', { class: 'emp-card__contact-item', title: 'Рабочий телефон' }, [
+                    el('svg', { viewBox: '0 0 24 24' }, [el('path', { d: 'M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57a1 1 0 01-.24 1.02l-2.21 2.2z' })]),
+                    el('span', { text: emp.work_phone })
+                ]));
+            }
+            if (emp.email) {
+                contactItems.push(el('div', { class: 'emp-card__contact-item', title: 'E-mail' }, [
+                    el('svg', { viewBox: '0 0 24 24' }, [el('path', { d: 'M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z' })]),
+                    el('span', { text: emp.email })
+                ]));
+            }
+            const contactsBlock = contactItems.length > 0 ? el('div', { class: 'emp-card__contacts' }, contactItems) : null;
+
+            // Нижняя строка карточки
+            const footerChildren = [];
+            if (emp.equipment) {
+                footerChildren.push(el('span', { title: emp.equipment, text: '💻 Техника закреплена' }));
+            } else {
+                footerChildren.push(el('span', { text: '' }));
+            }
+            if (emp.can_edit) {
+                footerChildren.push(el('span', { class: 'emp-card__badge-edit', text: '✏️ Редактировать' }));
+            }
+            const footer = el('div', { class: 'emp-card__footer' }, footerChildren);
+
+            card.append(head, wpBlock);
+            if (contactsBlock) card.append(contactsBlock);
+            card.append(footer);
+
+            card.addEventListener('click', () => openEmployeeModal(emp, false));
+            employeesGridEl.appendChild(card);
+        });
+    }
+
+    function openEmployeeModal(emp, isEditMode = false) {
+        if (!employeeModalEl || !employeeDialogEl) return;
+        employeeDialogEl.innerHTML = '';
+
+        if (!isEditMode) {
+            // ----- РЕЖИМ ПРОСМОТРА -----
+            const header = el('div', { class: 'modal__header' }, [
+                el('h2', { text: 'Карточка сотрудника' }),
+                el('button', { class: 'icon-btn', type: 'button', 'data-close': '', html: '&times;', onclick: closeEmployeeModal })
+            ]);
+
+            let avatarBig;
+            if (emp.photo_url) {
+                avatarBig = el('img', { class: 'emp-modal-view__avatar', src: emp.photo_url, alt: emp.full_name });
+            } else {
+                avatarBig = el('div', { class: 'emp-modal-view__avatar emp-modal-view__avatar--placeholder', text: emp.initials || '—' });
+            }
+
+            const heroInfo = el('div', { class: 'emp-modal-view__info' }, [
+                el('h1', { class: 'emp-modal-view__name', text: emp.full_name }),
+                el('div', { class: 'emp-modal-view__pos', text: emp.position || 'Должность не указана' }),
+                emp.department ? el('span', { class: 'emp-modal-view__dept-tag', text: emp.department }) : null,
+            ].filter(Boolean));
+
+            const hero = el('div', { class: 'emp-modal-view__hero' }, [avatarBig, heroInfo]);
+
+            // Блоки деталей
+            let wpValEl;
+            if (emp.workplace) {
+                wpValEl = el('div', {}, [
+                    el('div', { style: 'font-weight: 600; color: #0066cc; margin-bottom: 4px;', text: `📍 ${emp.workplace.code} · ${emp.workplace.floor_name || ''} ${emp.workplace.room ? '(' + emp.workplace.room + ')' : ''}`.trim() }),
+                    el('button', {
+                        class: 'btn btn--ghost btn--small',
+                        type: 'button',
+                        style: 'margin-top: 4px; font-size: 12px;',
+                        text: 'Показать на карте этажа',
+                        onclick: () => {
+                            closeEmployeeModal();
+                            state.floor = String(emp.workplace.floor_id);
+                            state.selectedPlace = emp.workplace.code;
+                            setView('map');
+                        }
+                    })
+                ]);
+            } else {
+                wpValEl = el('div', { style: 'color: #9c5800; font-weight: 600;', text: '📍 Не задано' });
+            }
+
+            const detailsGrid = el('div', { class: 'emp-details-grid' }, [
+                el('div', { class: 'emp-detail-block' }, [
+                    el('span', { class: 'emp-detail-block__label', text: 'Рабочее место' }),
+                    wpValEl,
+                ]),
+                el('div', { class: 'emp-detail-block' }, [
+                    el('span', { class: 'emp-detail-block__label', text: 'Контакты' }),
+                    el('div', { class: 'emp-detail-block__val' }, [
+                        emp.work_phone ? el('div', { html: `тел: <a href="tel:${emp.work_phone}">${emp.work_phone}</a>` }) : el('div', { text: 'тел: —' }),
+                        emp.email ? el('div', { html: `email: <a href="mailto:${emp.email}">${emp.email}</a>` }) : el('div', { text: 'email: —' }),
+                    ]),
+                ]),
+                el('div', { class: 'emp-detail-block emp-detail-block--full' }, [
+                    el('span', { class: 'emp-detail-block__label', text: 'Закреплённая техника (Инвентаризация)' }),
+                    el('div', { class: 'emp-detail-block__val', style: 'white-space: pre-wrap; line-height: 1.5;', text: emp.equipment || 'Оборудование пока не закреплено' }),
+                ]),
+            ]);
+
+            // Плашка прав доступа
+            let permBanner;
+            if (emp.can_edit) {
+                permBanner = el('div', { class: 'emp-modal__perm-banner emp-modal__perm-banner--ok' }, [
+                    el('span', { text: 'Вы можете редактировать эту карточку (как администратор системы или владелец).' }),
+                    el('button', {
+                        class: 'btn btn--action btn--small',
+                        type: 'button',
+                        text: '✏️ Редактировать',
+                        onclick: () => openEmployeeModal(emp, true)
+                    })
+                ]);
+            } else if (!state.auth.is_authenticated) {
+                permBanner = el('div', { class: 'emp-modal__perm-banner emp-modal__perm-banner--info' }, [
+                    el('span', { text: 'Редактировать карточки сотрудников могут либо администраторы системы, либо сами сотрудники.' }),
+                    el('button', {
+                        class: 'btn btn--ghost btn--small',
+                        type: 'button',
+                        text: 'Войти',
+                        onclick: () => openLoginModal()
+                    })
+                ]);
+            } else {
+                permBanner = el('div', { class: 'emp-modal__perm-banner emp-modal__perm-banner--info' }, [
+                    el('span', { text: 'Редактировать карточку может только сам сотрудник или администратор системы.' })
+                ]);
+            }
+
+            const body = el('div', { class: 'modal__body emp-modal-view' }, [hero, detailsGrid, permBanner]);
+
+            const footer = el('div', { class: 'modal__footer' }, [
+                el('div', {}),
+                el('div', { class: 'modal__footer-right' }, [
+                    el('button', { class: 'btn btn--ghost', type: 'button', text: 'Закрыть', onclick: closeEmployeeModal }),
+                    emp.can_edit ? el('button', { class: 'btn btn--action', type: 'button', text: 'Редактировать', onclick: () => openEmployeeModal(emp, true) }) : null,
+                ].filter(Boolean))
+            ]);
+
+            employeeDialogEl.append(header, body, footer);
+        } else {
+            // ----- РЕЖИМ РЕДАКТИРОВАНИЯ -----
+            const form = el('form', { id: 'empEditForm', autocomplete: 'off' });
+
+            const header = el('div', { class: 'modal__header' }, [
+                el('h2', { text: `Редактирование: ${emp.full_name}` }),
+                el('button', { class: 'icon-btn', type: 'button', 'data-close': '', html: '&times;', onclick: () => openEmployeeModal(emp, false) })
+            ]);
+
+            const errBanner = el('div', {
+                class: 'emp-modal__perm-banner emp-modal__perm-banner--info',
+                style: 'color: #d42a0c; background: #ffe0db; border-color: #fc3f1d; margin-bottom: 12px;',
+                hidden: true
+            });
+
+            // Загрузка фото
+            let photoPreviewEl;
+            if (emp.photo_url) {
+                photoPreviewEl = el('img', { class: 'photo-uploader__preview', src: emp.photo_url });
+            } else {
+                photoPreviewEl = el('div', { class: 'photo-uploader__preview', text: emp.initials || '—' });
+            }
+            const photoInput = el('input', { type: 'file', name: 'photo', accept: 'image/*', class: 'input' });
+            photoInput.addEventListener('change', () => {
+                if (photoInput.files && photoInput.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        photoPreviewEl.outerHTML = `<img class="photo-uploader__preview" src="${e.target.result}">`;
+                    };
+                    reader.readAsDataURL(photoInput.files[0]);
+                }
+            });
+
+            const photoControls = [photoInput];
+            if (emp.photo_url) {
+                photoControls.push(el('label', { style: 'font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;' }, [
+                    el('input', { type: 'checkbox', name: 'delete_photo', value: 'true' }),
+                    el('span', { text: 'Удалить текущее фото' })
+                ]));
+            }
+
+            const photoBlock = el('div', { class: 'photo-uploader' }, [
+                photoPreviewEl,
+                el('div', { class: 'photo-uploader__controls' }, [
+                    el('span', { class: 'field__label', text: 'Фотография сотрудника' }),
+                    ...photoControls
+                ])
+            ]);
+
+            // Выбор рабочего места
+            const wpSelect = el('select', { class: 'input', name: 'workplace_id' }, [
+                el('option', { value: '', text: '— Не задано —' })
+            ]);
+
+            // Группируем по этажам
+            const floorsGrouped = {};
+            state.workplaces.forEach((w) => {
+                const fname = w.floor_name || `Этаж ${w.floor_id}`;
+                if (!floorsGrouped[fname]) floorsGrouped[fname] = [];
+                floorsGrouped[fname].push(w);
+            });
+            Object.entries(floorsGrouped).forEach(([fname, wps]) => {
+                const optgroup = el('optgroup', { label: fname });
+                wps.forEach((w) => {
+                    const opt = el('option', {
+                        value: String(w.id),
+                        text: `${w.code}${w.room ? ' · ' + w.room : ''}${w.label ? ' · ' + w.label : ''}`.trim()
+                    });
+                    if (emp.workplace && String(emp.workplace.id) === String(w.id)) {
+                        opt.selected = true;
+                    }
+                    optgroup.appendChild(opt);
+                });
+                wpSelect.appendChild(optgroup);
+            });
+
+            // Форма
+            const body = el('div', { class: 'modal__body' }, [
+                errBanner,
+                photoBlock,
+                el('label', { class: 'field' }, [
+                    el('span', { class: 'field__label', html: 'ФИО <span class="req">*</span>' }),
+                    el('input', { class: 'input', name: 'full_name', value: emp.full_name, required: true, maxlength: '200' })
+                ]),
+                el('div', { class: 'grid-2' }, [
+                    el('label', { class: 'field' }, [
+                        el('span', { class: 'field__label', text: 'Должность' }),
+                        el('input', { class: 'input', name: 'position', value: emp.position || '', placeholder: 'Инженер, менеджер...' })
+                    ]),
+                    el('label', { class: 'field' }, [
+                        el('span', { class: 'field__label', text: 'Отдел' }),
+                        el('input', { class: 'input', name: 'department', list: 'empDeptDatalist', value: emp.department || '', placeholder: 'Отдел...' }),
+                    ]),
+                ]),
+                el('div', { class: 'grid-2' }, [
+                    el('label', { class: 'field' }, [
+                        el('span', { class: 'field__label', text: 'Рабочий телефон' }),
+                        el('input', { class: 'input', name: 'work_phone', value: emp.work_phone || '', placeholder: '+7 (xxx) xxx-xx-xx' })
+                    ]),
+                    el('label', { class: 'field' }, [
+                        el('span', { class: 'field__label', text: 'E-mail' }),
+                        el('input', { class: 'input', type: 'email', name: 'email', value: emp.email || '', placeholder: 'user@company.ru' })
+                    ]),
+                ]),
+                el('label', { class: 'field' }, [
+                    el('span', { class: 'field__label', text: 'Рабочее место на плане этажа' }),
+                    wpSelect
+                ]),
+                el('label', { class: 'field' }, [
+                    el('span', { class: 'field__label', text: 'Закреплённая техника (для инвентаризации)' }),
+                    el('textarea', { class: 'input input--area', name: 'equipment', rows: '4', placeholder: 'ПК Dell OptiPlex, монитор 27", периферия...' }, [
+                        document.createTextNode(emp.equipment || '')
+                    ])
+                ]),
+            ]);
+
+            const footer = el('div', { class: 'modal__footer' }, [
+                el('div', {}),
+                el('div', { class: 'modal__footer-right' }, [
+                    el('button', { class: 'btn btn--ghost', type: 'button', text: 'Отмена', onclick: () => openEmployeeModal(emp, false) }),
+                    el('button', { class: 'btn btn--action', type: 'submit', id: 'empSaveBtn', text: 'Сохранить изменения' }),
+                ])
+            ]);
+
+            form.append(header, body, footer);
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const saveBtn = form.querySelector('#empSaveBtn');
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Сохранение...';
+                errBanner.hidden = true;
+
+                const formData = new FormData(form);
+                try {
+                    const resp = await fetch(`/api/employees/${emp.id}/update/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCsrfToken(),
+                        },
+                        body: formData,
+                    });
+                    const res = await resp.json();
+                    if (!resp.ok || !res.success) {
+                        throw new Error(res.error || 'Не удалось сохранить данные сотрудника');
+                    }
+                    // Обновляем сотрудника в памяти
+                    const updatedEmp = res.employee;
+                    const idx = state.employees.findIndex((x) => x.id === emp.id);
+                    if (idx !== -1) {
+                        state.employees[idx] = updatedEmp;
+                    }
+                    // Добавляем отдел в фильтры если новый
+                    if (updatedEmp.department && !state.departments.includes(updatedEmp.department)) {
+                        state.departments.push(updatedEmp.department);
+                        state.departments.sort();
+                        initEmployeeFilters();
+                    }
+                    populateCreatorList();
+                    render();
+                    openEmployeeModal(updatedEmp, false);
+                } catch (err) {
+                    errBanner.textContent = err.message;
+                    errBanner.hidden = false;
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Сохранить изменения';
+                }
+            });
+
+            employeeDialogEl.appendChild(form);
+        }
+
+        employeeModalEl.hidden = false;
+    }
+
+    function closeEmployeeModal() {
+        if (employeeModalEl) employeeModalEl.hidden = true;
+    }
+
+    // ---------- АВТОРИЗАЦИЯ И USER PILL ----------
+
+    function renderUserPill() {
+        if (!userPillEl) return;
+        userPillEl.innerHTML = '';
+
+        if (state.auth.is_authenticated) {
+            const username = state.auth.username || 'Пользователь';
+            const isAdmin = state.auth.is_admin;
+            const initial = username.charAt(0).toUpperCase();
+
+            const avatar = el('span', { class: 'user-pill__avatar', text: initial });
+            const nameSpan = el('span', { style: 'font-weight: 600;', text: username });
+            const roleBadge = el('span', {
+                class: `user-pill__role ${isAdmin ? 'user-pill__role--admin' : ''}`,
+                text: isAdmin ? 'Администратор' : 'Сотрудник'
+            });
+            const logoutBtn = el('button', {
+                class: 'user-pill__btn',
+                type: 'button',
+                text: 'Выйти',
+                onclick: handleLogout
+            });
+
+            userPillEl.append(avatar, nameSpan, roleBadge, logoutBtn);
+        } else {
+            const loginBtn = el('button', {
+                class: 'btn btn--ghost',
+                style: 'padding: 4px 10px; font-size: 13px; height: 32px;',
+                type: 'button',
+                text: 'Войти',
+                onclick: openLoginModal
+            });
+            userPillEl.append(loginBtn);
+        }
+    }
+
+    function openLoginModal() {
+        if (!loginModalEl || !loginFormEl) return;
+        loginFormEl.reset();
+        if (loginErrorEl) loginErrorEl.hidden = true;
+        loginModalEl.hidden = false;
+        setTimeout(() => {
+            const uInput = loginFormEl.querySelector('input[name="username"]');
+            if (uInput) uInput.focus();
+        }, 50);
+    }
+
+    function closeLoginModal() {
+        if (loginModalEl) loginModalEl.hidden = true;
+    }
+
+    async function handleLogout() {
+        try {
+            await fetch('/api/auth/logout/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrfToken() },
+            });
+        } catch (e) { /* ignore */ }
+        state.auth = { is_authenticated: false, username: '', is_admin: false };
+        await refreshEmployees();
+        render();
+    }
+
+    if (loginFormEl) {
+        loginFormEl.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (loginErrorEl) loginErrorEl.hidden = true;
+            const submitBtn = loginFormEl.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+
+            const username = loginFormEl.username.value.trim();
+            const password = loginFormEl.password.value;
+
+            try {
+                const resp = await fetch('/api/auth/login/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify({ username, password }),
+                });
+                const res = await resp.json();
+                if (!resp.ok || !res.success) {
+                    throw new Error(res.error || 'Неверный логин или пароль');
+                }
+                state.auth = {
+                    is_authenticated: true,
+                    username: res.user.username,
+                    is_admin: res.user.is_admin,
+                };
+                closeLoginModal();
+                await refreshEmployees();
+                render();
+            } catch (err) {
+                if (loginErrorEl) {
+                    loginErrorEl.textContent = err.message;
+                    loginErrorEl.hidden = false;
+                }
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    }
+
+    async function refreshEmployees() {
+        try {
+            const resp = await fetch('/api/employees/');
+            const data = await resp.json();
+            if (data && data.employees) {
+                state.employees = data.employees;
+                state.departments = data.departments;
+                if (data.auth) state.auth = data.auth;
+                initEmployeeFilters();
+                populateCreatorList();
+            }
+        } catch (e) {
+            console.error('Ошибка обновления списка сотрудников:', e);
+        }
+    }
+
+    function initEmployeeFilters() {
+        if (!filterEmpDeptEl) return;
+        filterEmpDeptEl.innerHTML = '<option value="">Все отделы</option>';
+        state.departments.forEach((dept) => {
+            const opt = el('option', { value: dept, text: dept });
+            if (state.empFilters.dept === dept) opt.selected = true;
+            filterEmpDeptEl.appendChild(opt);
+        });
+
+        if (filterEmpFloorEl) {
+            filterEmpFloorEl.innerHTML = '<option value="">Все этажи</option>';
+            CONFIG.floors.forEach((f) => {
+                const opt = el('option', { value: String(f.id), text: f.name });
+                if (state.empFilters.floor === String(f.id)) opt.selected = true;
+                filterEmpFloorEl.appendChild(opt);
+            });
+        }
+    }
+
+    function populateCreatorList() {
+        if (!creatorListEl) return;
+        creatorListEl.innerHTML = '';
+        const names = new Set();
+        (state.employees || []).forEach((e) => {
+            if (e.full_name) names.add(e.full_name.trim());
+        });
+        (CONFIG.assignees || []).forEach((a) => {
+            if (a.name) names.add(a.name.trim());
+        });
+        workplaces.forEach((wp) => {
+            if (wp.employee) names.add(wp.employee.trim());
+        });
+        Array.from(names).sort().forEach((name) => {
+            creatorListEl.appendChild(el('option', { value: name }));
+        });
+    }
+
+    if (employeeModalEl) {
+        employeeModalEl.querySelectorAll('[data-close]').forEach((n) =>
+            n.addEventListener('click', closeEmployeeModal));
+    }
+    if (loginModalEl) {
+        loginModalEl.querySelectorAll('[data-close]').forEach((n) =>
+            n.addEventListener('click', closeLoginModal));
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (employeeModalEl && !employeeModalEl.hidden) closeEmployeeModal();
+            if (loginModalEl && !loginModalEl.hidden) closeLoginModal();
+        }
+    });
+
+    if (filterEmpDeptEl) {
+        filterEmpDeptEl.addEventListener('change', () => {
+            state.empFilters.dept = filterEmpDeptEl.value;
+            render();
+        });
+    }
+    if (filterEmpWorkplaceEl) {
+        filterEmpWorkplaceEl.addEventListener('change', () => {
+            state.empFilters.workplace = filterEmpWorkplaceEl.value;
+            render();
+        });
+    }
+    if (filterEmpFloorEl) {
+        filterEmpFloorEl.addEventListener('change', () => {
+            state.empFilters.floor = filterEmpFloorEl.value;
+            render();
+        });
+    }
+    if (resetEmpFiltersEl) {
+        resetEmpFiltersEl.addEventListener('click', () => {
+            state.empFilters = { dept: '', workplace: '', floor: '', query: '' };
+            if (filterEmpDeptEl) filterEmpDeptEl.value = '';
+            if (filterEmpWorkplaceEl) filterEmpWorkplaceEl.value = '';
+            if (filterEmpFloorEl) filterEmpFloorEl.value = '';
+            if (searchInput) searchInput.value = '';
+            render();
+        });
+    }
+
+    // Инициализируем фильтры и список создателей
+    initEmployeeFilters();
+    populateCreatorList();
+
+    // ---------- Переключение доска / карта / сотрудники ----------
+    function setView(view) {
+        state.view = view;
+        const hash = view === 'map' ? '#map' : (view === 'employees' ? '#employees' : '#board');
+        history.replaceState(null, '', hash);
+        render();
+    }
+
+    document.getElementById('toggleViewBtn').addEventListener('click', () =>
+        setView(state.view === 'map' ? 'board' : 'map'));
+    document.querySelectorAll('.nav-item[data-view]').forEach((n) =>
+        n.addEventListener('click', (e) => { e.preventDefault(); setView(n.dataset.view); }));
+    window.addEventListener('hashchange', () => {
+        state.view = parseHashView();
+        render();
+    });
+
+    document.getElementById('createBtn').addEventListener('click', () => {
+        if (state.view === 'employees') {
+            window.open('/admin/users/employee/add/', '_blank');
+            return;
+        }
+        openModal(null, state.view === 'map' && state.selectedPlace ? { workplace: state.selectedPlace } : {});
+    });
+
+    // ---------- Предупреждение о сборе Cookie ----------
+    function initCookieBanner() {
+        const STORAGE_KEY = 'ptracker.cookie_consent_accepted';
+        const banner = document.getElementById('cookieBanner');
+        const btn = document.getElementById('cookieAcceptBtn');
+        if (!banner || !btn) return;
+
+        if (!localStorage.getItem(STORAGE_KEY)) {
+            setTimeout(() => {
+                banner.hidden = false;
+                requestAnimationFrame(() => {
+                    banner.classList.add('cookie-banner--visible');
+                });
+            }, 600);
+        }
+
+        btn.addEventListener('click', () => {
+            localStorage.setItem(STORAGE_KEY, 'true');
+            banner.classList.remove('cookie-banner--visible');
+            setTimeout(() => {
+                banner.hidden = true;
+            }, 300);
+        });
+    }
+
+    initCookieBanner();
+    render();
+})();

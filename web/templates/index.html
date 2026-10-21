@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PTracker — Задачи</title>
+    <link rel="stylesheet" href="static/css/tracker.css">
+</head>
+<body>
+<div class="app">
+    <!-- Боковое меню -->
+    <aside class="sidebar">
+        <div class="sidebar__logo">
+            <span class="logo-mark" aria-hidden="true"></span>
+            <span class="logo-text">Трекер</span>
+        </div>
+        <nav class="sidebar__nav">
+            <a class="nav-item nav-item--active" href="#board" data-view="board">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>
+                Доска
+            </a>
+            <a class="nav-item" href="#map" data-view="map">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+                Задачи на карте
+            </a>
+            <a class="nav-item" href="#employees" data-view="employees">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                Сотрудники
+            </a>
+            <a class="nav-item" href="{% url 'constructor' %}">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                Конструктор карт
+            </a>
+        </nav>
+        <div class="sidebar__section">
+            <div class="sidebar__title">Исполнители</div>
+            <ul class="people" id="peopleList"></ul>
+        </div>
+    </aside>
+
+    <!-- Основная часть -->
+    <main class="main">
+        <header class="topbar">
+            <div class="topbar__heading">
+                <h1 id="pageTitle">Задачи</h1>
+                <span class="counter" id="taskCounter">0</span>
+            </div>
+            <div class="topbar__actions">
+                <div class="search">
+                    <svg viewBox="0 0 24 24" class="search__icon"><path d="M10 4a6 6 0 1 0 3.9 10.6l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>
+                    <input type="search" id="searchInput" placeholder="Поиск: задача, сотрудник, место">
+                </div>
+                <div class="user-pill" id="userPill"></div>
+                <button class="btn btn--ghost" id="toggleViewBtn" type="button">
+                    <svg viewBox="0 0 24 24" class="btn__icon"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+                    <span id="toggleViewText">Задачи на карте</span>
+                </button>
+                <button class="btn btn--action" id="createBtn" type="button">
+                    <span class="btn__plus">+</span> Создать задачу
+                </button>
+            </div>
+        </header>
+
+        <!-- Фильтры задач -->
+        <section class="filters" id="taskFilters">
+            <label class="select">
+                <span class="select__label">Исполнитель</span>
+                <select id="filterAssignee"><option value="">Все</option></select>
+            </label>
+            <label class="select">
+                <span class="select__label">Priority</span>
+                <select id="filterPriority"><option value="">Все</option></select>
+            </label>
+            <label class="select">
+                <span class="select__label">Severity</span>
+                <select id="filterSeverity"><option value="">Все</option></select>
+            </label>
+            <button class="btn btn--ghost" id="resetFilters" type="button">Сбросить</button>
+        </section>
+
+        <!-- Фильтры сотрудников -->
+        <section class="filters" id="employeeFilters" hidden>
+            <label class="select">
+                <span class="select__label">Отдел</span>
+                <select id="filterEmpDept"><option value="">Все отделы</option></select>
+            </label>
+            <label class="select">
+                <span class="select__label">Рабочее место</span>
+                <select id="filterEmpWorkplace">
+                    <option value="">Все сотрудники</option>
+                    <option value="assigned">С рабочим местом</option>
+                    <option value="unassigned">Не задано</option>
+                </select>
+            </label>
+            <label class="select">
+                <span class="select__label">Этаж</span>
+                <select id="filterEmpFloor">
+                    <option value="">Все этажи</option>
+                </select>
+            </label>
+            <button class="btn btn--ghost" id="resetEmpFilters" type="button">Сбросить</button>
+        </section>
+
+        <section class="board" id="board"></section>
+
+        <!-- Карта офиса -->
+        <section class="office" id="officeView" hidden>
+            <div class="office__toolbar">
+                <div class="floor-tabs" id="floorTabs" role="tablist"></div>
+                <div class="legend">
+                    <span class="legend__item"><i class="legend__dot st-ok"></i>Всё работает</span>
+                    <span class="legend__item"><i class="legend__dot st-s4"></i>S4</span>
+                    <span class="legend__item"><i class="legend__dot st-s3"></i>S3</span>
+                    <span class="legend__item"><i class="legend__dot st-s2"></i>S2</span>
+                    <span class="legend__item"><i class="legend__dot st-s1"></i>S1</span>
+                </div>
+                <a class="btn btn--ghost" href="{% url 'constructor' %}" id="editFloorBtn" style="text-decoration:none">
+                    <svg viewBox="0 0 24 24" class="btn__icon"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                    <span>Редактор этажа</span>
+                </a>
+            </div>
+            <div class="office__layout">
+                <div class="office__canvas" id="officeCanvas">
+                    <svg id="floorSvg" class="floor" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+                    <!-- Всплывающая карточка сотрудника и его задач при наведении на рабочее место -->
+                    <div class="desk-hover-card" id="deskHoverCard" hidden></div>
+                </div>
+                <aside class="office__panel" id="officePanel"></aside>
+            </div>
+        </section>
+
+        <!-- Список сотрудников -->
+        <section class="employees-view" id="employeesView" hidden>
+            <div class="employees-grid" id="employeesGrid"></div>
+            <div class="employees-empty" id="employeesEmpty" hidden>
+                <div style="font-size: 36px; margin-bottom: 8px;">🔍</div>
+                <p>Сотрудники по выбранным критериям не найдены</p>
+            </div>
+        </section>
+    </main>
+</div>
+
+<!-- Модальное окно задачи -->
+<div class="modal" id="taskModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <form class="modal__dialog" id="taskForm" autocomplete="off">
+        <div class="modal__header">
+            <h2 id="modalTitle">Новая задача</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <input type="hidden" name="id">
+            <label class="field">
+                <span class="field__label">Название <span class="req">*</span></span>
+                <input class="input" name="title" required maxlength="200" placeholder="Что нужно сделать?">
+            </label>
+            <label class="field">
+                <span class="field__label">Описание</span>
+                <textarea class="input input--area" name="description" rows="4" placeholder="Подробности, шаги воспроизведения, ожидаемый результат"></textarea>
+            </label>
+            <div class="grid-2">
+                <label class="field">
+                    <span class="field__label">Создал</span>
+                    <input class="input" name="creator" list="creatorList" placeholder="ФИО сотрудника" autocomplete="off">
+                    <datalist id="creatorList"></datalist>
+                </label>
+                <label class="field">
+                    <span class="field__label">Рабочее место</span>
+                    <select class="input" name="workplace"></select>
+                </label>
+            </div>
+            <div class="grid-2">
+                <label class="field">
+                    <span class="field__label">Исполнитель</span>
+                    <select class="input" name="assignee"></select>
+                </label>
+                <label class="field">
+                    <span class="field__label">Статус</span>
+                    <select class="input" name="status"></select>
+                </label>
+                <label class="field">
+                    <span class="field__label">Priority</span>
+                    <select class="input" name="priority"></select>
+                </label>
+                <label class="field">
+                    <span class="field__label">Severity</span>
+                    <select class="input" name="severity"></select>
+                </label>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn--danger-ghost" type="button" id="deleteBtn" hidden>Удалить</button>
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--action" type="submit" id="saveBtn">Создать</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Модальное окно сотрудника (просмотр и редактирование) -->
+<div class="modal" id="employeeModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--wide" id="employeeDialog"></div>
+</div>
+
+<!-- Модальное окно авторизации -->
+<div class="modal" id="loginModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <form class="modal__dialog modal__dialog--small" id="loginForm" autocomplete="off">
+        <div class="modal__header">
+            <h2>Вход в систему</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <div id="loginError" class="emp-modal__perm-banner emp-modal__perm-banner--info" style="color: #d42a0c; background: #ffe0db; border-color: #fc3f1d; margin-bottom: 12px;" hidden></div>
+            <label class="field">
+                <span class="field__label">Логин <span class="req">*</span></span>
+                <input class="input" name="username" required autocomplete="username" placeholder="Логин (например admin)">
+            </label>
+            <label class="field">
+                <span class="field__label">Пароль <span class="req">*</span></span>
+                <input class="input" type="password" name="password" required autocomplete="current-password" placeholder="Пароль">
+            </label>
+            <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 0;">
+                Администраторы могут редактировать любые карточки, а сотрудники — свои профили.
+            </p>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+            <button class="btn btn--action" type="submit">Войти</button>
+        </div>
+    </form>
+</div>
+
+<!-- Предупреждение о сборе Cookie -->
+<aside class="cookie-banner" id="cookieBanner" hidden aria-live="polite">
+    <div class="cookie-banner__icon" aria-hidden="true">🍪</div>
+    <div class="cookie-banner__content">
+        <div class="cookie-banner__title">Предупреждение о сборе cookie</div>
+        <p class="cookie-banner__text">Системные администраторы отобрали Ваши cookie, но Вы можете взять ещё на кухне.</p>
+    </div>
+    <button class="btn btn--action cookie-banner__btn" id="cookieAcceptBtn" type="button">Звучит честно!</button>
+</aside>
+<script id="tracker-config" type="application/json">
+    {{ .TrackerConfigJSON }}
+</script>
+<script src="static/js/tracker.js"></script>
+</body>
+</html>
