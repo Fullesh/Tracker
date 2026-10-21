@@ -15,7 +15,7 @@ import (
 // InitDB загружает переменные из .env и подключается к PSQL через GORM
 func InitDB() (*gorm.DB, error) {
 	// Загружаем переменные из .env при наличии
-	if err := godotenv.Load("../../.env"); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		log.Println("Файл .env не найден")
 	}
 	// Собираем строку подключения
