@@ -85,3 +85,21 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 	})
 }
+
+func (h *Handler) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		auth := h.currentAuth(r)
+		isAdmin, _ := auth["is_admin"].(bool)
+		if !isAdmin {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   "Доступ запрещён: требуются права администратора",
+			})
+			return
+		}
+		// Если админ — передаём управление дальше целевому обработчику
+		next(w, r)
+	}
+}
