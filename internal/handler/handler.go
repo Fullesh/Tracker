@@ -35,6 +35,7 @@ func (h *Handler) InitRoutes() http.Handler {
 	// REST FLOORS
 	mux.HandleFunc("POST /api/floors/{id}/save/{$}", h.RequireAdmin(h.SaveFloor))
 	mux.HandleFunc("POST /api/floors/create/{$}", h.RequireAdmin(h.CreateFloor))
+	mux.HandleFunc("POST /api/floors/{id}/delete/{$}", h.RequireAdmin(h.DeleteFloor))
 
 	//REST USERS
 	mux.HandleFunc("GET /api/employees/{$}", h.GetEmployees)
