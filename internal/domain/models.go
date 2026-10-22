@@ -85,3 +85,16 @@ type User struct {
 	IsAdmin      bool      `gorm:"default:false" json:"is_admin"`
 	CreatedAt    time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
 }
+
+type WorkSession struct {
+	ID             uint       `gorm:"primaryKey" json:"id"`
+	UserID         uint       `gorm:"index;not null" json:"user_id"`
+	User           *User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Status         string     `gorm:"size:20;default:'active';not null;index" json:"status"` // "active", "paused", "finished
+	StartedAt      time.Time  `gorm:"not null" json:"started_at"`
+	PausedAt       *time.Time `json:"paused_at,omitempty"`
+	PausedDuration int        `gorm:"default:0;not null" json:"paused_duration"` //накопленная пауза в секундах
+	FinishedAt     *time.Time `json:"finished_at,omitempty"`
+	CreatedAt      time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt      time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
