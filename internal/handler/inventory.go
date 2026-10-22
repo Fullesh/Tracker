@@ -164,5 +164,19 @@ func (h *Handler) UpdateInventoryItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteInventoryItem(w http.ResponseWriter, r *http.Request) {
-	return
+	idStr := r.PathValue("id")
+	inventoryID, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Некорректный ID оборудования", http.StatusBadRequest)
+		return
+	}
+	if err := h.db.Delete(&domain.InventoryItem{}, inventoryID).Error; err != nil {
+		http.Error(w, "Ошибка при удалении оборудования: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+	})
 }
