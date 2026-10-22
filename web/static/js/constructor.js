@@ -931,6 +931,90 @@
         }
     };
 
+    // Модальное окно подтверждения удаления этажа
+    const deleteFloorModal = document.getElementById('deleteFloorModal');
+    const deleteFloorModalMessage = document.getElementById('deleteFloorModalMessage');
+    const confirmDeleteFloorBtn = document.getElementById('confirmDeleteFloorBtn');
+    let floorToDelete = null;
+
+    function openDeleteFloorModal(floor) {
+        if (!deleteFloorModal) return;
+        floorToDelete = floor;
+        if (deleteFloorModalMessage) {
+            deleteFloorModalMessage.innerHTML = `Вы действительно хотите удалить этаж <strong>«${escapeHtml(floor.name)}»</strong>?`;
+        }
+        deleteFloorModal.hidden = false;
+    }
+
+    function closeDeleteFloorModal() {
+        if (deleteFloorModal) {
+            deleteFloorModal.hidden = true;
+        }
+        floorToDelete = null;
+    }
+
+    if (deleteFloorModal) {
+        deleteFloorModal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', closeDeleteFloorModal);
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !deleteFloorModal.hidden) {
+                closeDeleteFloorModal();
+            }
+        });
+    }
+
+    // Удалить текущий этаж
+    const deleteFloorBtn = document.getElementById('deleteFloorBtn');
+    if (deleteFloorBtn) {
+        deleteFloorBtn.onclick = () => {
+            const floor = getCurrentFloor();
+            if (!floor) return;
+
+            if (state.floors.length <= 1) {
+                showToast('Нельзя удалить единственный этаж!', 'error');
+                return;
+            }
+
+            openDeleteFloorModal(floor);
+        };
+    }
+
+    if (confirmDeleteFloorBtn) {
+        confirmDeleteFloorBtn.onclick = async () => {
+            if (!floorToDelete) return;
+            const floor = floorToDelete;
+            confirmDeleteFloorBtn.disabled = true;
+
+            try {
+                const resp = await fetch(`/api/floors/${floor.id}/delete/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                });
+                const data = await resp.json();
+                if (data.success || data.ok) {
+                    showToast(`Этаж «${floor.name}» удалён`, 'success');
+                    closeDeleteFloorModal();
+                    const idx = state.floors.findIndex((f) => f.id === floor.id);
+                    if (idx !== -1) {
+                        state.floors.splice(idx, 1);
+                    }
+                    switchFloor(state.floors[0].id);
+                } else {
+                    showToast(data.error || 'Ошибка при удалении этажа', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Ошибка при удалении этажа', 'error');
+            } finally {
+                confirmDeleteFloorBtn.disabled = false;
+            }
+        };
+    }
+
     // Добавить новый этаж
     document.getElementById('addFloorBtn').onclick = async () => {
         const name = prompt('Название нового этажа:', `${state.floors.length + 1} этаж`);

@@ -620,3 +620,14 @@
     text-align: center;
 }
 
+.btn--danger {
+    background: var(--ya-red);
+    color: #fff;
+    border: none;
+}
+
+.btn--danger:hover {
+    background: #e03212;
+}
+
+
