@@ -39,6 +39,7 @@
     function parseHashView() {
         if (location.hash === '#map') return 'map';
         if (location.hash === '#employees') return 'employees';
+        if (location.hash === '#my-tasks') return 'my-tasks';
         return 'board';
     }
 
@@ -247,21 +248,35 @@
     const loginFormEl = document.getElementById('loginForm');
     const loginErrorEl = document.getElementById('loginError');
     const creatorListEl = document.getElementById('creatorList');
+    const myTasksViewEl = document.getElementById('myTasksView');
+    const myTasksGridEl = document.getElementById('myTasksGrid');
+    const myTasksEmptyEl = document.getElementById('myTasksEmpty');
 
     function render() {
         hideHoverCard();
         const isEmployees = state.view === 'employees';
         const isMap = state.view === 'map';
         const isBoard = state.view === 'board';
+        const isMyTasks = state.view === 'my-tasks';
 
         boardEl.hidden = !isBoard;
         officeEl.hidden = !isMap;
         if (employeesViewEl) employeesViewEl.hidden = !isEmployees;
+        if (myTasksViewEl) myTasksViewEl.hidden = !isMyTasks;
 
-        if (taskFiltersEl) taskFiltersEl.hidden = isEmployees;
+        if (taskFiltersEl) taskFiltersEl.hidden = (isEmployees || isMyTasks);
         if (employeeFiltersEl) employeeFiltersEl.hidden = !isEmployees;
 
-        if (isEmployees) {
+        if (isMyTasks) {
+            pageTitleEl.textContent = 'Мои задачи';
+            const myTasks = getMyTasks();
+            counterEl.textContent = myTasks.length;
+            counterEl.title = 'Моих задач';
+            toggleViewBtn.hidden = true;
+            createBtn.hidden = false;
+            createBtn.innerHTML = '<span class="btn__plus">+</span> Создать задачу';
+            renderMyTasks();
+        } else if (isEmployees) {
             pageTitleEl.textContent = 'Сотрудники';
             const empList = filteredEmployees();
             counterEl.textContent = empList.length;
@@ -999,8 +1014,9 @@
         saveBtn.textContent = isEdit ? 'Сохранить' : 'Создать';
         deleteBtn.hidden = !isEdit;
 
+        const defaultCreator = (state.auth && (state.auth.employee_name || state.auth.username)) || '';
         const initialWorkplace = isEdit ? (task.workplace || '') : (preset.workplace || '');
-        const initialCreator = isEdit ? (task.creator || '') : (preset.creator || '');
+        const initialCreator = isEdit ? (task.creator || '') : (preset.creator || defaultCreator);
 
         form.id.value = isEdit ? task.id : '';
         form.title.value = isEdit ? task.title : '';
@@ -1215,12 +1231,12 @@
             // Нижняя строка карточки
             const footerChildren = [];
             if (emp.equipment) {
-                footerChildren.push(el('span', { title: emp.equipment, text: '💻 Техника закреплена' }));
+                footerChildren.push(el('span', { title: emp.equipment, text: 'Техника закреплена' }));
             } else {
                 footerChildren.push(el('span', { text: '' }));
             }
             if (emp.can_edit) {
-                footerChildren.push(el('span', { class: 'emp-card__badge-edit', text: '✏️ Редактировать' }));
+                footerChildren.push(el('span', { class: 'emp-card__badge-edit', text: 'Редактировать' }));
             }
             const footer = el('div', { class: 'emp-card__footer' }, footerChildren);
 
@@ -1230,6 +1246,74 @@
 
             card.addEventListener('click', () => openEmployeeModal(emp, false));
             employeesGridEl.appendChild(card);
+        });
+    }
+
+    // ---------- Мои задачи ----------
+    function getMyTasks() {
+        const empName = state.auth.employee_name || '';
+        const username = state.auth.username || '';
+        const wpId = state.auth.workplace_id ? Number(state.auth.workplace_id) : null;
+
+        return state.tasks.filter((t) => {
+            const matchesCreator = (empName && t.creator === empName) || (username && t.creator === username);
+            const matchesWorkplace = wpId && t.workplace && Number(t.workplace) === wpId;
+            return matchesCreator || matchesWorkplace;
+        });
+    }
+
+    function renderMyTasks() {
+        if (!myTasksGridEl) return;
+        myTasksGridEl.innerHTML = '';
+        const myTasks = getMyTasks();
+
+        if (myTasks.length === 0) {
+            if (myTasksEmptyEl) myTasksEmptyEl.hidden = false;
+            return;
+        }
+        if (myTasksEmptyEl) myTasksEmptyEl.hidden = true;
+
+        myTasks.forEach((task) => {
+            const statusObj = CONFIG.statuses.find((s) => s.id === task.status) || { name: task.status, id: task.status };
+            const priorityObj = CONFIG.priorities.find((p) => p.id === task.priority) || { name: task.priority };
+
+            const assigneeName = task.assignee || '';
+            const hasAssignee = Boolean(assigneeName && assigneeName.trim());
+
+            let wpLabel = '';
+            if (task.workplace && workplacesById[task.workplace]) {
+                const wp = workplacesById[task.workplace];
+                wpLabel = `${wp.code}${wp.room ? ' · ' + wp.room : ''}`;
+            }
+
+            const card = el('div', { class: 'my-task-card', onclick: () => openModal(task) }, [
+                el('div', { class: 'my-task-card__top' }, [
+                    el('div', { class: 'my-task-card__tags' }, [
+                        el('span', { class: `my-task-card__badge my-task-card__status--${task.status}`, text: statusObj.name }),
+                        el('span', { class: 'tag', text: priorityObj.name })
+                    ]),
+                    el('span', { class: 'card__key', text: `${KEY_PREFIX}-${task.id}` })
+                ]),
+                el('div', {}, [
+                    el('h3', { class: 'my-task-card__title', text: task.title }),
+                    task.description ? el('p', { class: 'my-task-card__desc', text: task.description }) : null
+                ]),
+                el('div', { class: 'my-task-card__footer' }, [
+                    el('div', { class: 'my-task-card__assignee' }, [
+                        el('span', { class: `my-task-card__assignee-dot ${hasAssignee ? '' : 'my-task-card__assignee-dot--empty'}` }),
+                        el('span', {
+                            style: hasAssignee ? 'color: var(--text-primary);' : 'color: var(--text-secondary); font-style: italic;',
+                            text: hasAssignee ? `Исполнитель: ${assigneeName}` : 'Исполнитель: не назначен'
+                        })
+                    ]),
+                    el('div', { class: 'my-task-card__meta-row' }, [
+                        wpLabel ? el('span', { text: `Стол: ${wpLabel}` }) : el('span', { text: 'Без привязки к месту' }),
+                        task.creator ? el('span', { text: `Автор: ${task.creator}` }) : el('span', {})
+                    ])
+                ])
+            ]);
+
+            myTasksGridEl.appendChild(card);
         });
     }
 
@@ -1809,10 +1893,10 @@
     initEmployeeFilters();
     populateCreatorList();
 
-    // ---------- Переключение доска / карта / сотрудники ----------
+    // ---------- Переключение доска / карта / сотрудники / мои задачи ----------
     function setView(view) {
         state.view = view;
-        const hash = view === 'map' ? '#map' : (view === 'employees' ? '#employees' : '#board');
+        const hash = view === 'map' ? '#map' : (view === 'employees' ? '#employees' : (view === 'my-tasks' ? '#my-tasks' : '#board'));
         history.replaceState(null, '', hash);
         render();
     }
@@ -1841,8 +1925,25 @@
             }, true);
             return;
         }
+        if (state.view === 'my-tasks') {
+            openModal(null, {
+                creator: state.auth.employee_name || state.auth.username || '',
+                workplace: state.auth.workplace_id ? String(state.auth.workplace_id) : ''
+            });
+            return;
+        }
         openModal(null, state.view === 'map' && state.selectedPlace ? { workplace: state.selectedPlace } : {});
     });
+
+    const createMyTaskBtn = document.getElementById('createMyTaskBtn');
+    if (createMyTaskBtn) {
+        createMyTaskBtn.addEventListener('click', () => {
+            openModal(null, {
+                creator: state.auth.employee_name || state.auth.username || '',
+                workplace: state.auth.workplace_id ? String(state.auth.workplace_id) : ''
+            });
+        });
+    }
 
     // ---------- Предупреждение о сборе Cookie ----------
     function initCookieBanner() {

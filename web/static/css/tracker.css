@@ -1228,6 +1228,146 @@ select.input {
     background: #fc3f1d;
 }
 
+/* Раздел: Мои задачи */
+.my-tasks-view {
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.my-tasks-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.my-tasks-header__title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 4px 0;
+}
+
+.my-tasks-header__desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.my-tasks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+}
+
+.my-task-card {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-m);
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.my-task-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: #0077ff;
+}
+
+.my-task-card__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 11px;
+}
+
+.my-task-card__tags {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.my-task-card__badge {
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.my-task-card__status--open { background: #eef6ff; color: #0066cc; }
+.my-task-card__status--in_progress { background: #fff8e6; color: #b36b00; }
+.my-task-card__status--review { background: #f3e8ff; color: #7e22ce; }
+.my-task-card__status--closed { background: #e6f8eb; color: #15803d; }
+
+.my-task-card__title {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 6px 0;
+    color: var(--text-primary);
+    line-height: 1.35;
+}
+
+.my-task-card__desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    margin: 0 0 14px 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.my-task-card__footer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid #f0f0f0;
+    font-size: 12px;
+}
+
+.my-task-card__assignee {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
+.my-task-card__assignee-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #0077ff;
+}
+
+.my-task-card__assignee-dot--empty {
+    background: #bbb;
+}
+
+.my-task-card__meta-row {
+    display: flex;
+    justify-content: space-between;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.my-tasks-empty {
+    padding: 48px 16px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+
 
 
 
