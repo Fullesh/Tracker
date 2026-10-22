@@ -72,6 +72,12 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Constructor(w http.ResponseWriter, r *http.Request) {
+	auth := h.currentAuth(r)
+	isAdmin, _ := auth["is_admin"].(bool)
+	if !isAdmin {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
 	var activeFloorID uint
 	var floors []domain.Floor
 	var employees []domain.Employee
