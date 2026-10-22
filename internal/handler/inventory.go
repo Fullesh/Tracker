@@ -52,7 +52,7 @@ func (h *Handler) CreateInventoryItem(w http.ResponseWriter, r *http.Request) {
 	var wpCode string
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, "Некорректный JSON", http.StatusBadRequest)
+		http.Error(w, "Некорректный JSON в теле запроса", http.StatusBadRequest)
 		return
 	}
 
