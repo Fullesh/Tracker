@@ -47,6 +47,7 @@ type Workplace struct {
 
 type Employee struct {
 	ID          uint       `gorm:"primaryKey" json:"id"`
+	User        *User      `gorm:"foreignKey:EmployeeID" json:"user,omitempty"`
 	FullName    string     `gorm:"size:200;not null;index" json:"full_name"`
 	Photo       string     `gorm:"size:255" json:"photo_url"`
 	Position    string     `gorm:"size:150" json:"position"`
@@ -80,7 +81,7 @@ type User struct {
 	EmployeeID   *uint     `gorm:"index;constraint:OnDelete:SET NULL;" json:"employee_id,omitempty"`
 	Employee     *Employee `gorm:"foreignKey:EmployeeID" json:"employee"`
 	Username     string    `gorm:"size:20;uniqueIndex;not null" json:"username"`
-	PasswordHash string    `gorm:"size:255;not null" json:"password_hash"`
-	IsAdmin      bool      `gorm:"default:true" json:"is_admin"`
+	PasswordHash string    `gorm:"size:255;not null" json:"-"`
+	IsAdmin      bool      `gorm:"default:false" json:"is_admin"`
 	CreatedAt    time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
 }
