@@ -55,6 +55,11 @@ func Seed(db *gorm.DB) error {
 	if err := seedAdmin(db); err != nil {
 		return fmt.Errorf("Ошибка создания админа: %w", err)
 	}
+
+	if err := seedTasks(db); err != nil {
+		return fmt.Errorf("Ошибка создания задач: %w", err)
+	}
+
 	log.Println("Наполнение базы данных успешно завершено!")
 	return nil
 }
@@ -307,5 +312,101 @@ func seedAdmin(db *gorm.DB) error {
 	if err := db.Create(&admin).Error; err != nil {
 		return err
 	}
+	return nil
+}
+
+func seedTasks(db *gorm.DB) error {
+	var count int64
+	db.Model(&domain.Task{}).Count(&count)
+	if count > 0 {
+		return nil
+	}
+	var workplaces []domain.Workplace
+	db.Order("id ASC").Limit(10).Find(&workplaces)
+
+	wpID := func(index int) *uint {
+		if index < len(workplaces) {
+			return &workplaces[index].ID
+		}
+		return nil
+	}
+
+	tasks := []domain.Task{
+		{
+			Title:       "Перегрев стойки R2",
+			Description: "Температура на входе 34°C, сработал алерт мониторинга.",
+			Creator:     "system",
+			Assignee:    "2",
+			Status:      "in_progress",
+			Priority:    "blocker",
+			Severity:    "s1",
+			WorkplaceID: wpID(0),
+		},
+		{
+			Title:       "Не печатает МФУ",
+			Description: "Ошибка «Замятие бумаги», хотя бумаги внутри нет.",
+			Creator:     "system",
+			Assignee:    "1",
+			Status:      "open",
+			Priority:    "high",
+			Severity:    "s2",
+			WorkplaceID: wpID(1),
+		},
+		{
+			Title:       "Нет доступа к 1С",
+			Description: "После обновления пароля не пускает в базу.",
+			Creator:     "system",
+			Assignee:    "1",
+			Status:      "open",
+			Priority:    "critical",
+			Severity:    "s2",
+			WorkplaceID: wpID(2),
+		},
+		{
+			Title:       "Мерцает монитор",
+			Description: "Периодически гаснет экран при шевелении провода HDMI.",
+			Creator:     "system",
+			Assignee:    "2",
+			Status:      "open",
+			Priority:    "normal",
+			Severity:    "s3",
+			WorkplaceID: wpID(3),
+		},
+		{
+			Title:       "Не работает ВКС в «Казани»",
+			Description: "Камера не определяется в Телемосте.",
+			Creator:     "system",
+			Assignee:    "2",
+			Status:      "review",
+			Priority:    "high",
+			Severity:    "s3",
+			WorkplaceID: wpID(4),
+		},
+		{
+			Title:       "Установить второй монитор",
+			Description: "Запрос от руководителя для работы с таблицами.",
+			Creator:     "system",
+			Assignee:    "1",
+			Status:      "open",
+			Priority:    "low",
+			Severity:    "s4",
+			WorkplaceID: wpID(5),
+		},
+		{
+			Title:       "Заменить клавиатуру",
+			Description: "Залипает клавиша пробел.",
+			Creator:     "system",
+			Assignee:    "1",
+			Status:      "closed",
+			Priority:    "low",
+			Severity:    "s4",
+			WorkplaceID: wpID(6),
+		},
+	}
+
+	if err := db.Create(&tasks).Error; err != nil {
+		return err
+	}
+	log.Println("Демо-задачи успешно созданы")
 	return nil
 }
