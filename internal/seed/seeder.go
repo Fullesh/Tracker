@@ -248,7 +248,7 @@ func seedFloors(db *gorm.DB) error {
 					if room.Kind == "pc" && empIndex < len(allEmployees) {
 						emp := &allEmployees[empIndex]
 						wp.Employee = emp.FullName
-						wp.Label = emp.Position
+						//wp.Label = emp.Position
 
 						if err := db.Create(&wp).Error; err != nil {
 							return err
