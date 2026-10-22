@@ -49,11 +49,17 @@ func (h *Handler) InitRoutes() http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/update/{$}", h.UpdateTask)
 	mux.HandleFunc("POST /api/tasks/{id}/delete/{$}", h.DeleteTask)
 
-	//WORKDAY
+	//REST WORKDAY
 	mux.HandleFunc("GET /api/workday/status/{$}", h.GetWorkdayStatus)
 	mux.HandleFunc("POST /api/workday/start/{$}", h.StartWorkday)
 	mux.HandleFunc("POST /api/workday/pause/{$}", h.TogglePauseWorkday)
 	mux.HandleFunc("POST /api/workday/finish/{$}", h.FinishWorkday)
+
+	//REST INVENTORY
+	mux.HandleFunc("GET /api/inventory/{$}", h.RequireMTOOrAdmin(h.GetInventory))
+	mux.HandleFunc("POST /api/inventory/create/{$}", h.RequireMTOOrAdmin(h.CreateInventoryItem))
+	mux.HandleFunc("POST /api/inventory/{id}/update/{$}", h.RequireMTOOrAdmin(h.UpdateInventoryItem))
+	mux.HandleFunc("POST /api/inventory/{id}/delete/{$}", h.RequireMTOOrAdmin(h.DeleteInventoryItem))
 
 	return mux
 }
