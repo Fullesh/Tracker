@@ -18,6 +18,7 @@ func Migrate(db *gorm.DB) error {
 		&domain.Employee{},
 		&domain.Task{},
 		&domain.User{},
+		&domain.WorkSession{},
 	)
 	if err != nil {
 		return err
