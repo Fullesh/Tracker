@@ -98,3 +98,18 @@ type WorkSession struct {
 	CreatedAt      time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt      time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
+
+type InventoryItem struct {
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	InventoryNumber string    `gorm:"size:100;uniqueIndex;notnull" json:"inventory_number"`
+	Name            string    `gorm:"size:200;notnull" json:"name"`
+	Category        string    `gorm:"size:50;notnull;index" json:"category"`
+	TypeCode        string    `gorm:"size:10;notnull" json:"type_code"`
+	Status          string    `gorm:"size:50;default:'assigned';not null;index" json:"status"`
+	WorkplaceCode   string    `gorm:"size:50" json:"workplace_code"`
+	EmployeeID      *uint     `gorm:"index;constraint:OnDelete:SET NULL;" json:"employee_id,omitempty"`
+	Employee        *Employee `gorm:"foreignKey:EmployeeID" json:"employee,omitempty"`
+	Notes           string    `gorm:"type:text" json:"notes"`
+	CreatedAt       time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt       time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
