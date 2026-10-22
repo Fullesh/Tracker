@@ -4,6 +4,7 @@ import (
 	"PTracker/internal/domain"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -61,14 +62,21 @@ func (h *Handler) currentAuth(r *http.Request) map[string]any {
 	if err := h.db.Preload("Employee").Where("username = ?", cookie.Value).First(&user).Error; err == nil {
 		empName := ""
 		var wpID *uint
+		isMTO := false
 		if user.Employee != nil {
 			empName = user.Employee.FullName
 			wpID = user.Employee.WorkplaceID
+			dept := strings.ToLower(user.Employee.Department)
+			pos := strings.ToLower(user.Employee.Position)
+			if strings.Contains(dept, "МТО") || strings.Contains(pos, "МТО") {
+				isMTO = true
+			}
 		}
 		return map[string]any{
 			"is_authenticated": true,
 			"username":         user.Username,
 			"is_admin":         user.IsAdmin,
+			"is_mto":           isMTO || user.IsAdmin,
 			"user_id":          user.ID,
 			"employee_name":    empName,
 			"workplace_id":     wpID,
