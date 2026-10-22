@@ -1279,7 +1279,7 @@
                 wpValEl = el('div', { style: 'color: #9c5800; font-weight: 600;', text: '📍 Не задано' });
             }
 
-            const detailsGrid = el('div', { class: 'emp-details-grid' }, [
+            const detailsGridChildren = [
                 el('div', { class: 'emp-detail-block' }, [
                     el('span', { class: 'emp-detail-block__label', text: 'Рабочее место' }),
                     wpValEl,
@@ -1295,7 +1295,20 @@
                     el('span', { class: 'emp-detail-block__label', text: 'Закреплённая техника (Инвентаризация)' }),
                     el('div', { class: 'emp-detail-block__val', style: 'white-space: pre-wrap; line-height: 1.5;', text: emp.equipment || 'Оборудование пока не закреплено' }),
                 ]),
-            ]);
+            ];
+
+            if (state.auth && state.auth.is_admin) {
+                detailsGridChildren.push(el('div', { class: 'emp-detail-block emp-detail-block--full' }, [
+                    el('span', { class: 'emp-detail-block__label', text: 'Учётная запись (доступ в систему)' }),
+                    el('div', { class: 'emp-detail-block__val' }, [
+                        emp.user && emp.user.username
+                            ? el('span', { style: 'font-weight: 500;', text: `Логин: ${emp.user.username}${emp.user.is_admin ? ' (Администратор)' : ''}` })
+                            : el('span', { style: 'color: var(--text-secondary);', text: 'Учётная запись не создана (нет доступа в систему)' })
+                    ])
+                ]));
+            }
+
+            const detailsGrid = el('div', { class: 'emp-details-grid' }, detailsGridChildren);
 
             // Плашка прав доступа
             let permBanner;
@@ -1305,7 +1318,7 @@
                     el('button', {
                         class: 'btn btn--action btn--small',
                         type: 'button',
-                        text: '✏️ Редактировать',
+                        text: 'Редактировать',
                         onclick: () => openEmployeeModal(emp, true)
                     })
                 ]);
@@ -1414,7 +1427,7 @@
             });
 
             // Форма
-            const body = el('div', { class: 'modal__body' }, [
+            const bodyFields = [
                 errBanner,
                 photoBlock,
                 el('label', { class: 'field' }, [
@@ -1451,7 +1464,56 @@
                         document.createTextNode(emp.equipment || '')
                     ])
                 ]),
-            ]);
+            ];
+
+            if (state.auth && state.auth.is_admin) {
+                const userLogin = (emp.user && emp.user.username) || '';
+                const passwordInput = el('input', {
+                    class: 'input',
+                    type: 'text',
+                    name: 'password',
+                    placeholder: userLogin ? 'Оставьте пустым, чтобы не изменять' : 'Введите пароль или нажмите «Сгенерировать»'
+                });
+
+                const genPassBtn = el('button', {
+                    class: 'btn btn--ghost btn--small',
+                    type: 'button',
+                    style: 'font-size: 11px; padding: 2px 8px;',
+                    text: 'Сгенерировать пароль',
+                    onclick: () => {
+                        const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%';
+                        let pass = '';
+                        for (let i = 0; i < 10; i++) {
+                            pass += chars.charAt(Math.floor(Math.random() * chars.length));
+                        }
+                        passwordInput.value = pass;
+                    }
+                });
+
+                bodyFields.push(el('div', {
+                    class: 'emp-modal__auth-box',
+                    style: 'background: var(--bg-control); border-radius: 8px; padding: 12px; margin-top: 12px;'
+                }, [
+                    el('div', { style: 'font-weight: 600; font-size: 13px; margin-bottom: 8px;' }, [
+                        document.createTextNode('Учётная запись (доступ в систему)')
+                    ]),
+                    el('div', { class: 'grid-2' }, [
+                        el('label', { class: 'field' }, [
+                            el('span', { class: 'field__label', text: 'Логин (username)' }),
+                            el('input', { class: 'input', name: 'username', value: userLogin, placeholder: 'например, ivanov' })
+                        ]),
+                        el('label', { class: 'field' }, [
+                            el('div', { style: 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;' }, [
+                                el('span', { class: 'field__label', text: 'Пароль' }),
+                                genPassBtn
+                            ]),
+                            passwordInput
+                        ])
+                    ])
+                ]));
+            }
+
+            const body = el('div', { class: 'modal__body' }, bodyFields);
 
             const footer = el('div', { class: 'modal__footer' }, [
                 el('div', {}),
@@ -1526,6 +1588,17 @@
     function renderUserPill() {
         if (!userPillEl) return;
         userPillEl.innerHTML = '';
+
+        // Ограничение видимости конструктора только для администратора
+        const isAdmin = state.auth && state.auth.is_admin;
+        const constructorNav = document.getElementById('constructorNavBtn');
+        if (constructorNav) {
+            constructorNav.style.display = isAdmin ? '' : 'none';
+        }
+        const editFloorBtn = document.getElementById('editFloorBtn');
+        if (editFloorBtn) {
+            editFloorBtn.style.display = isAdmin ? '' : 'none';
+        }
 
         if (state.auth.is_authenticated) {
             const username = state.auth.username || 'Пользователь';
