@@ -43,7 +43,10 @@ func (h *Handler) StartWorkday(w http.ResponseWriter, r *http.Request) {
 		Status:    "active",
 		StartedAt: time.Now(),
 	}
-	h.db.Create(&session)
+	if err := h.db.Create(&session).Error; err != nil {
+		http.Error(w, "Не удалось начать день: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

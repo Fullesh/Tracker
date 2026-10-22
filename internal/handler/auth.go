@@ -106,7 +106,7 @@ func (h *Handler) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (h *Handler) currentUser(r *http.Request) *domain.User {
-	cookie, err := r.Cookie("session")
+	cookie, err := r.Cookie("session_user")
 	if err != nil || cookie.Value == "" {
 		return nil
 	}
