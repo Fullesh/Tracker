@@ -1949,7 +1949,7 @@
 
         const session = state.workday;
 
-        if (!session || session.status === 'none') {
+        if (!session || session.status === 'none' || session.status === 'finished') {
             if (workdayTimerInterval) {
                 clearInterval(workdayTimerInterval);
                 workdayTimerInterval = null;
@@ -2045,7 +2045,7 @@
                         });
                         const res = await resp.json();
                         if (resp.ok && res.session) {
-                            state.workday = res.session;
+                            state.workday = null;
                             if (workdayTimerInterval) {
                                 clearInterval(workdayTimerInterval);
                                 workdayTimerInterval = null;
@@ -2067,22 +2067,6 @@
             widgetEl.append(timerEl, pauseBtn, finishBtn);
             return;
         }
-
-        if (session.status === 'finished') {
-            if (workdayTimerInterval) {
-                clearInterval(workdayTimerInterval);
-                workdayTimerInterval = null;
-            }
-            const elapsed = getWorkdayElapsedMs(session);
-            const timeStr = formatDuration(elapsed);
-
-            const badge = el('span', {
-                class: 'workday-timer workday-timer--finished',
-                text: `День завершён: ${timeStr}`
-            });
-
-            widgetEl.append(badge);
-        }
     }
 
     async function loadWorkdayStatus() {
@@ -2091,7 +2075,7 @@
             const resp = await fetch('/api/workday/status/');
             if (resp.ok) {
                 const data = await resp.json();
-                if (data.has_session && data.session) {
+                if (data.has_session && data.session && data.session.status !== 'finished') {
                     state.workday = data.session;
                 } else {
                     state.workday = null;
