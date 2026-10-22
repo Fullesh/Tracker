@@ -40,6 +40,7 @@
         if (location.hash === '#map') return 'map';
         if (location.hash === '#employees') return 'employees';
         if (location.hash === '#my-tasks') return 'my-tasks';
+        if (location.hash === '#inventory') return 'inventory';
         return 'board';
     }
 
@@ -48,12 +49,15 @@
         tasks: loadTasks(),
         filters: { assignee: '', priority: '', severity: '', query: '' },
         empFilters: { dept: '', workplace: '', floor: '', query: '' },
+        invFilters: { status: 'all', category: '', query: '' },
         view: parseHashView(),
         floor: String(CONFIG.floors[0]?.id || 1),
         selectedPlace: null,
         employees: CONFIG.employees || [],
         departments: CONFIG.departments || [],
         workplaces: CONFIG.workplaces || [],
+        inventory: [],
+        inventoryLoaded: false,
         auth: CONFIG.auth || { is_authenticated: false, username: '', is_admin: false },
         selectedEmployee: null,
         workday: null,
@@ -252,22 +256,50 @@
     const myTasksGridEl = document.getElementById('myTasksGrid');
     const myTasksEmptyEl = document.getElementById('myTasksEmpty');
 
+    const inventoryViewEl = document.getElementById('inventoryView');
+    const inventoryFiltersEl = document.getElementById('inventoryFilters');
+    const inventoryTableBodyEl = document.getElementById('inventoryTableBody');
+    const inventoryEmptyEl = document.getElementById('inventoryEmpty');
+    const filterInvStatusEl = document.getElementById('filterInvStatus');
+    const filterInvCategoryEl = document.getElementById('filterInvCategory');
+    const resetInvFiltersEl = document.getElementById('resetInvFilters');
+
     function render() {
         hideHoverCard();
         const isEmployees = state.view === 'employees';
         const isMap = state.view === 'map';
         const isBoard = state.view === 'board';
         const isMyTasks = state.view === 'my-tasks';
+        const isInventory = state.view === 'inventory';
 
         boardEl.hidden = !isBoard;
         officeEl.hidden = !isMap;
         if (employeesViewEl) employeesViewEl.hidden = !isEmployees;
         if (myTasksViewEl) myTasksViewEl.hidden = !isMyTasks;
+        if (inventoryViewEl) inventoryViewEl.hidden = !isInventory;
 
-        if (taskFiltersEl) taskFiltersEl.hidden = (isEmployees || isMyTasks);
+        if (taskFiltersEl) taskFiltersEl.hidden = (isEmployees || isMyTasks || isInventory);
         if (employeeFiltersEl) employeeFiltersEl.hidden = !isEmployees;
+        if (inventoryFiltersEl) inventoryFiltersEl.hidden = !isInventory;
 
-        if (isMyTasks) {
+        const canAccessMTO = !!(state.auth.is_admin || state.auth.is_mto);
+        const invNavBtn = document.getElementById('inventoryNavBtn');
+        if (invNavBtn) invNavBtn.hidden = !canAccessMTO;
+
+        if (isInventory) {
+            pageTitleEl.textContent = 'Инвентаризация';
+            const invList = filteredInventory();
+            counterEl.textContent = invList.length;
+            counterEl.title = 'Всего оборудования';
+            toggleViewBtn.hidden = true;
+            if (canAccessMTO) {
+                createBtn.hidden = false;
+                createBtn.innerHTML = '<span class="btn__plus">+</span> Добавить оборудование';
+            } else {
+                createBtn.hidden = true;
+            }
+            renderInventory(invList);
+        } else if (isMyTasks) {
             pageTitleEl.textContent = 'Мои задачи';
             const myTasks = getMyTasks();
             counterEl.textContent = myTasks.length;
@@ -1230,7 +1262,16 @@
 
             // Нижняя строка карточки
             const footerChildren = [];
-            if (emp.equipment) {
+            const empInv = (Array.isArray(emp.inventory_items) && emp.inventory_items.length > 0)
+                ? emp.inventory_items
+                : (state.inventory || []).filter((it) => it.employee_id === emp.id);
+
+            if (empInv.length > 0) {
+                footerChildren.push(el('span', {
+                    title: empInv.map((i) => `${i.inventory_number}: ${i.name}`).join('\n'),
+                    text: `Техника: ${empInv.length} шт.`
+                }));
+            } else if (emp.equipment) {
                 footerChildren.push(el('span', { title: emp.equipment, text: 'Техника закреплена' }));
             } else {
                 footerChildren.push(el('span', { text: '' }));
@@ -1362,7 +1403,39 @@
                     })
                 ]);
             } else {
-                wpValEl = el('div', { style: 'color: #9c5800; font-weight: 600;', text: '📍 Не задано' });
+                wpValEl = el('div', { style: 'color: #9c5800; font-weight: 600;', text: 'Не задано' });
+            }
+
+            const empInv = (Array.isArray(emp.inventory_items) && emp.inventory_items.length > 0)
+                ? emp.inventory_items
+                : (state.inventory || []).filter((it) => it.employee_id === emp.id);
+
+            let equipmentValEl;
+            if (empInv.length > 0) {
+                equipmentValEl = el('div', { class: 'emp-inventory-list' }, empInv.map((it) => {
+                    const st = INV_STATUS_MAP[it.status] || { name: it.status || 'В работе', cls: 'inv-status--assigned' };
+                    return el('div', { class: 'emp-inventory-item' }, [
+                        el('div', { class: 'emp-inventory-item__info' }, [
+                            el('span', { class: 'inventory-num', text: it.inventory_number || '' }),
+                            el('span', { class: 'inventory-name', text: it.name || '' }),
+                            el('span', { class: `inv-status-badge ${st.cls}`, text: st.name }),
+                        ]),
+                        el('button', {
+                            class: 'btn btn--ghost btn--icon-sm',
+                            type: 'button',
+                            text: 'Печать',
+                            title: 'Печать термонаклейки 50x30 мм',
+                            onclick: (e) => {
+                                e.stopPropagation();
+                                printInventorySticker(it);
+                            }
+                        })
+                    ]);
+                }));
+            } else if (emp.equipment) {
+                equipmentValEl = el('div', { class: 'emp-detail-block__val', style: 'white-space: pre-wrap; line-height: 1.5;', text: emp.equipment });
+            } else {
+                equipmentValEl = el('div', { class: 'emp-detail-block__val', style: 'color: var(--text-secondary);', text: 'Оборудование пока не закреплено' });
             }
 
             const detailsGridChildren = [
@@ -1379,7 +1452,7 @@
                 ]),
                 el('div', { class: 'emp-detail-block emp-detail-block--full' }, [
                     el('span', { class: 'emp-detail-block__label', text: 'Закреплённая техника (Инвентаризация)' }),
-                    el('div', { class: 'emp-detail-block__val', style: 'white-space: pre-wrap; line-height: 1.5;', text: emp.equipment || 'Оборудование пока не закреплено' }),
+                    equipmentValEl,
                 ]),
             ];
 
@@ -1857,6 +1930,7 @@
         if (e.key === 'Escape') {
             if (employeeModalEl && !employeeModalEl.hidden) closeEmployeeModal();
             if (loginModalEl && !loginModalEl.hidden) closeLoginModal();
+            if (inventoryModalEl && !inventoryModalEl.hidden) closeInventoryModal();
         }
     });
 
@@ -1893,11 +1967,14 @@
     initEmployeeFilters();
     populateCreatorList();
 
-    // ---------- Переключение доска / карта / сотрудники / мои задачи ----------
+    // ---------- Переключение доска / карта / сотрудники / мои задачи / инвентаризация ----------
     function setView(view) {
         state.view = view;
-        const hash = view === 'map' ? '#map' : (view === 'employees' ? '#employees' : (view === 'my-tasks' ? '#my-tasks' : '#board'));
+        const hash = view === 'map' ? '#map' : (view === 'employees' ? '#employees' : (view === 'my-tasks' ? '#my-tasks' : (view === 'inventory' ? '#inventory' : '#board')));
         history.replaceState(null, '', hash);
+        if (view === 'inventory' && !state.inventoryLoaded) {
+            loadInventory();
+        }
         render();
     }
 
@@ -1907,10 +1984,17 @@
         n.addEventListener('click', (e) => { e.preventDefault(); setView(n.dataset.view); }));
     window.addEventListener('hashchange', () => {
         state.view = parseHashView();
+        if (state.view === 'inventory' && !state.inventoryLoaded) {
+            loadInventory();
+        }
         render();
     });
 
     document.getElementById('createBtn').addEventListener('click', () => {
+        if (state.view === 'inventory') {
+            openInventoryModal();
+            return;
+        }
         if (state.view === 'employees') {
             openEmployeeModal({
                 id: 0,
@@ -2188,7 +2272,614 @@
         }
     }
 
+    // ---------- ЛОГИКА ИНВЕНТАРИЗАЦИИ (МТО) ----------
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    const inventoryModalEl = document.getElementById('inventoryModal');
+    const inventoryFormEl = document.getElementById('inventoryForm');
+    const invModalTitleEl = document.getElementById('invModalTitle');
+    const invCategorySelectEl = document.getElementById('invCategorySelect');
+    const invTypeCodeInputEl = document.getElementById('invTypeCodeInput');
+    const invStatusSelectEl = document.getElementById('invStatusSelect');
+    const invWorkplaceInputEl = document.getElementById('invWorkplaceInput');
+    const invWorkplaceListEl = document.getElementById('invWorkplaceList');
+    const invEmployeeSelectEl = document.getElementById('invEmployeeSelect');
+    const invNumberInputEl = document.getElementById('invNumberInput');
+    const invDeleteBtnEl = document.getElementById('invDeleteBtn');
+    const invPrintStickerBtnEl = document.getElementById('invPrintStickerBtn');
+    const invSaveBtnEl = document.getElementById('invSaveBtn');
+
+    const stickerPrintAreaEl = document.getElementById('stickerPrintArea');
+    const stickerQrContainerEl = document.getElementById('stickerQrContainer');
+    const stickerInvNumberEl = document.getElementById('stickerInvNumber');
+    const stickerInvNameEl = document.getElementById('stickerInvName');
+    const stickerInvPlaceEl = document.getElementById('stickerInvPlace');
+
+    let currentEditingInvItem = null;
+
+    const CATEGORY_TO_TYPE = {
+        'Монитор': 'MO',
+        'Компьютер': 'PC',
+        'Ноутбук': 'NB',
+        'Оргтехника': 'PR',
+        'Сетевое оборудование': 'NW',
+        'Мебель': 'CH',
+        'Другое': 'EQ'
+    };
+
+    const INV_STATUS_MAP = {
+        'assigned': { name: 'В работе', cls: 'inv-status--assigned' },
+        'storage': { name: 'На складе', cls: 'inv-status--storage' },
+        'repair': { name: 'В ремонте', cls: 'inv-status--repair' },
+        'decommissioned': { name: 'Списано', cls: 'inv-status--decommissioned' }
+    };
+
+    async function loadInventory() {
+        try {
+            const resp = await fetch('/api/inventory/');
+            if (!resp.ok) {
+                const errText = await resp.text();
+                console.error('Ошибка /api/inventory/:', resp.status, errText);
+                showToast(`Ошибка загрузки инвентаря (${resp.status}): ${errText}`, 'error');
+                return;
+            }
+            const data = await resp.json();
+            state.inventory = Array.isArray(data.items) ? data.items : [];
+            state.inventoryLoaded = true;
+            render();
+        } catch (err) {
+            console.error('Ошибка загрузки инвентаря:', err);
+            showToast('Ошибка сети при загрузке инвентаря: ' + (err.message || ''), 'error');
+        }
+    }
+
+    function filteredInventory() {
+        let list = state.inventory || [];
+        const status = state.invFilters.status;
+        if (status && status !== 'all') {
+            list = list.filter((item) => item.status === status);
+        }
+        const category = state.invFilters.category;
+        if (category) {
+            list = list.filter((item) => item.category === category);
+        }
+        const q = (state.filters.query || '').trim().toLowerCase();
+        if (q) {
+            list = list.filter((item) => {
+                return (item.name && item.name.toLowerCase().includes(q)) ||
+                       (item.inventory_number && item.inventory_number.toLowerCase().includes(q)) ||
+                       (item.workplace_code && item.workplace_code.toLowerCase().includes(q)) ||
+                       (item.type_code && item.type_code.toLowerCase().includes(q)) ||
+                       (item.notes && item.notes.toLowerCase().includes(q)) ||
+                       (item.employee && item.employee.full_name && item.employee.full_name.toLowerCase().includes(q));
+            });
+        }
+        return list;
+    }
+
+    function renderInventory(items) {
+        if (!inventoryTableBodyEl) return;
+        inventoryTableBodyEl.innerHTML = '';
+
+        if (!items || items.length === 0) {
+            if (inventoryEmptyEl) inventoryEmptyEl.hidden = false;
+            return;
+        }
+        if (inventoryEmptyEl) inventoryEmptyEl.hidden = true;
+
+        items.forEach((item) => {
+            const tr = document.createElement('tr');
+
+            const st = INV_STATUS_MAP[item.status] || { name: item.status || 'В работе', cls: 'inv-status--assigned' };
+            const placeText = item.workplace_code ? item.workplace_code : 'На складе';
+            const empText = (item.employee && item.employee.full_name) ? item.employee.full_name : '—';
+            const notesText = item.notes ? item.notes : '—';
+
+            tr.innerHTML = `
+                <td><span class="inventory-num">${escapeHtml(item.inventory_number || '')}</span></td>
+                <td><div class="inventory-name">${escapeHtml(item.name || '')}</div></td>
+                <td><span class="inventory-type-pill">${escapeHtml(item.type_code || '')} · ${escapeHtml(item.category || '')}</span></td>
+                <td><span class="inv-status-badge ${st.cls}">${escapeHtml(st.name)}</span></td>
+                <td>${escapeHtml(placeText)}</td>
+                <td>${escapeHtml(empText)}</td>
+                <td style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(notesText)}">${escapeHtml(notesText)}</td>
+                <td class="inventory-actions-th">
+                    <div class="inventory-actions">
+                        <button class="btn btn--ghost btn--icon-sm" type="button" data-inv-action="print" title="Печать наклейки 50x30 мм">Печать</button>
+                        <button class="btn btn--ghost btn--icon-sm" type="button" data-inv-action="edit">Изменить</button>
+                    </div>
+                </td>
+            `;
+
+            tr.querySelector('[data-inv-action="print"]').addEventListener('click', (e) => {
+                e.stopPropagation();
+                printInventorySticker(item);
+            });
+
+            tr.querySelector('[data-inv-action="edit"]').addEventListener('click', (e) => {
+                e.stopPropagation();
+                openInventoryModal(item);
+            });
+
+            tr.addEventListener('dblclick', () => {
+                openInventoryModal(item);
+            });
+
+            inventoryTableBodyEl.appendChild(tr);
+        });
+    }
+
+    function populateInvDropdowns() {
+        if (invWorkplaceListEl) {
+            invWorkplaceListEl.innerHTML = '';
+            const places = new Set();
+            (CONFIG.floors || []).forEach((floor) => {
+                (floor.workplaces || []).forEach((wp) => {
+                    const code = wp.name || wp.code;
+                    if (code) places.add(code);
+                });
+            });
+            Array.from(places).sort().forEach((code) => {
+                const opt = document.createElement('option');
+                opt.value = code;
+                invWorkplaceListEl.appendChild(opt);
+            });
+        }
+
+        if (invEmployeeSelectEl) {
+            invEmployeeSelectEl.innerHTML = '<option value="">Не назначен</option>';
+            (state.employees || []).forEach((emp) => {
+                const opt = document.createElement('option');
+                opt.value = String(emp.id);
+                const dept = emp.department ? ` (${emp.department})` : '';
+                opt.textContent = `${emp.full_name}${dept}`;
+                invEmployeeSelectEl.appendChild(opt);
+            });
+        }
+    }
+
+    function openInventoryModal(item = null) {
+        currentEditingInvItem = item;
+        inventoryFormEl.reset();
+        populateInvDropdowns();
+
+        if (item) {
+            invModalTitleEl.textContent = 'Редактирование оборудования';
+            inventoryFormEl.elements['id'].value = item.id;
+            inventoryFormEl.elements['name'].value = item.name || '';
+            invCategorySelectEl.value = item.category || 'Монитор';
+            invTypeCodeInputEl.value = item.type_code || 'MO';
+            invStatusSelectEl.value = item.status || 'assigned';
+            invWorkplaceInputEl.value = item.workplace_code || '';
+            invEmployeeSelectEl.value = item.employee_id ? String(item.employee_id) : '';
+            invNumberInputEl.value = item.inventory_number || '';
+            invNumberInputEl.placeholder = item.inventory_number || '';
+            inventoryFormEl.elements['notes'].value = item.notes || '';
+
+            invDeleteBtnEl.hidden = false;
+            invPrintStickerBtnEl.hidden = false;
+            invSaveBtnEl.textContent = 'Сохранить';
+        } else {
+            invModalTitleEl.textContent = 'Новое оборудование';
+            inventoryFormEl.elements['id'].value = '';
+            invCategorySelectEl.value = 'Монитор';
+            invTypeCodeInputEl.value = 'MO';
+            invStatusSelectEl.value = 'assigned';
+            invWorkplaceInputEl.value = '';
+            invEmployeeSelectEl.value = '';
+            invNumberInputEl.value = '';
+            invNumberInputEl.placeholder = 'Оставьте пустым для автогенерации (например INV_MO_9-301_01)';
+
+            invDeleteBtnEl.hidden = true;
+            invPrintStickerBtnEl.hidden = true;
+            invSaveBtnEl.textContent = 'Создать';
+        }
+
+        inventoryModalEl.hidden = false;
+        inventoryFormEl.elements['name'].focus();
+    }
+
+    function closeInventoryModal() {
+        inventoryModalEl.hidden = true;
+        currentEditingInvItem = null;
+    }
+
+    if (inventoryModalEl) {
+        inventoryModalEl.querySelectorAll('[data-close]').forEach((n) =>
+            n.addEventListener('click', closeInventoryModal));
+    }
+
+    if (invCategorySelectEl) {
+        invCategorySelectEl.addEventListener('change', () => {
+            const mapped = CATEGORY_TO_TYPE[invCategorySelectEl.value];
+            if (mapped) {
+                invTypeCodeInputEl.value = mapped;
+            }
+        });
+    }
+
+    if (inventoryFormEl) {
+        inventoryFormEl.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = inventoryFormEl.elements['id'].value;
+            const isEdit = Boolean(id);
+            const empVal = invEmployeeSelectEl.value;
+
+            const payload = {
+                name: inventoryFormEl.elements['name'].value.trim(),
+                category: invCategorySelectEl.value,
+                type_code: invTypeCodeInputEl.value.trim().toUpperCase(),
+                status: invStatusSelectEl.value,
+                workplace_code: invWorkplaceInputEl.value.trim(),
+                employee_id: empVal ? Number(empVal) : null,
+                inventory_number: invNumberInputEl.value.trim(),
+                notes: inventoryFormEl.elements['notes'].value.trim(),
+            };
+
+            const url = isEdit ? `/api/inventory/${id}/update/` : '/api/inventory/create/';
+            try {
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const text = await resp.text();
+                let res = null;
+                try {
+                    res = JSON.parse(text);
+                } catch (parseErr) {
+                    // ответ в виде plain text (например, от http.Error)
+                }
+
+                if (!resp.ok || (res && res.error)) {
+                    const errorMsg = (res && res.error) || text || ('Ошибка HTTP ' + resp.status);
+                    showToast(errorMsg, 'error');
+                    return;
+                }
+                showToast(isEdit ? 'Оборудование обновлено' : 'Оборудование добавлено', 'success');
+                closeInventoryModal();
+                await loadInventory();
+            } catch (err) {
+                console.error(err);
+                showToast('Ошибка отправки запроса: ' + (err.message || 'Сбой сети'), 'error');
+            }
+        });
+    }
+
+    if (invDeleteBtnEl) {
+        invDeleteBtnEl.addEventListener('click', async () => {
+            if (!currentEditingInvItem) return;
+            const ok = confirm(`Удалить оборудование "${currentEditingInvItem.name}" (${currentEditingInvItem.inventory_number})?`);
+            if (!ok) return;
+
+            try {
+                const resp = await fetch(`/api/inventory/${currentEditingInvItem.id}/delete/`, {
+                    method: 'POST',
+                });
+                const text = await resp.text();
+                let res = null;
+                try {
+                    res = JSON.parse(text);
+                } catch (parseErr) {}
+
+                if (!resp.ok || (res && res.error)) {
+                    const errorMsg = (res && res.error) || text || ('Ошибка HTTP ' + resp.status);
+                    showToast(errorMsg, 'error');
+                    return;
+                }
+                showToast('Оборудование удалено', 'success');
+                closeInventoryModal();
+                await loadInventory();
+            } catch (err) {
+                console.error(err);
+                showToast('Ошибка отправки запроса: ' + (err.message || 'Сбой сети'), 'error');
+            }
+        });
+    }
+
+    if (invPrintStickerBtnEl) {
+        invPrintStickerBtnEl.addEventListener('click', () => {
+            if (currentEditingInvItem) {
+                printInventorySticker(currentEditingInvItem);
+            }
+        });
+    }
+
+    if (filterInvStatusEl) {
+        filterInvStatusEl.addEventListener('change', () => {
+            state.invFilters.status = filterInvStatusEl.value;
+            render();
+        });
+    }
+
+    if (filterInvCategoryEl) {
+        filterInvCategoryEl.addEventListener('change', () => {
+            state.invFilters.category = filterInvCategoryEl.value;
+            render();
+        });
+    }
+
+    if (resetInvFiltersEl) {
+        resetInvFiltersEl.addEventListener('click', () => {
+            state.invFilters = { status: 'all', category: '', query: '' };
+            if (filterInvStatusEl) filterInvStatusEl.value = 'all';
+            if (filterInvCategoryEl) filterInvCategoryEl.value = '';
+            if (searchInput) searchInput.value = '';
+            state.filters.query = '';
+            render();
+        });
+    }
+
+    // ---------- Генерация QR-кода и печать наклеек 50x30 мм ----------
+
+    function createQRCodeSvg(text) {
+        const utf8Bytes = [];
+        for (let i = 0; i < text.length; i++) {
+            let code = text.charCodeAt(i);
+            if (code < 0x80) {
+                utf8Bytes.push(code);
+            } else if (code < 0x800) {
+                utf8Bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+            } else {
+                utf8Bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+            }
+        }
+
+        let version = 1;
+        let totalDataBytes = 16;
+        let ecBytesPerBlock = 10;
+        let numBlocks = 1;
+        let alignPos = [];
+
+        const dataLen = utf8Bytes.length;
+        if (dataLen <= 14) {
+            version = 1;
+            totalDataBytes = 16;
+            ecBytesPerBlock = 10;
+            numBlocks = 1;
+            alignPos = [];
+        } else if (dataLen <= 26) {
+            version = 2;
+            totalDataBytes = 28;
+            ecBytesPerBlock = 16;
+            numBlocks = 1;
+            alignPos = [6, 18];
+        } else if (dataLen <= 42) {
+            version = 3;
+            totalDataBytes = 44;
+            ecBytesPerBlock = 26;
+            numBlocks = 2;
+            alignPos = [6, 22];
+        } else {
+            version = 4;
+            totalDataBytes = 64;
+            ecBytesPerBlock = 36;
+            numBlocks = 2;
+            alignPos = [6, 26];
+        }
+
+        const size = 17 + 4 * version;
+        let bitBuffer = [];
+        function putBits(num, count) {
+            for (let i = count - 1; i >= 0; i--) {
+                bitBuffer.push((num >> i) & 1);
+            }
+        }
+
+        putBits(4, 4);
+        putBits(dataLen, 8);
+        for (const b of utf8Bytes) putBits(b, 8);
+        const rem = totalDataBytes * 8 - bitBuffer.length;
+        putBits(0, Math.min(4, rem));
+        while (bitBuffer.length % 8 !== 0) bitBuffer.push(0);
+        const pad = [0xEC, 0x11];
+        let padIdx = 0;
+        while (bitBuffer.length < totalDataBytes * 8) {
+            putBits(pad[padIdx % 2], 8);
+            padIdx++;
+        }
+
+        const dataBytes = [];
+        for (let i = 0; i < bitBuffer.length; i += 8) {
+            let b = 0;
+            for (let j = 0; j < 8; j++) b = (b << 1) | bitBuffer[i + j];
+            dataBytes.push(b);
+        }
+
+        const EXP = new Uint8Array(512);
+        const LOG = new Uint8Array(256);
+        let x = 1;
+        for (let i = 0; i < 255; i++) {
+            EXP[i] = x;
+            EXP[i + 255] = x;
+            LOG[x] = i;
+            x = (x << 1) ^ (x >= 128 ? 0x11d : 0);
+        }
+
+        function gmul(a, b) {
+            if (a === 0 || b === 0) return 0;
+            return EXP[LOG[a] + LOG[b]];
+        }
+
+        function getGeneratorPoly(degree) {
+            let poly = [1];
+            for (let i = 0; i < degree; i++) {
+                const next = new Array(poly.length + 1).fill(0);
+                for (let j = 0; j < poly.length; j++) {
+                    next[j] ^= gmul(poly[j], EXP[i]);
+                    next[j + 1] ^= poly[j];
+                }
+                poly = next;
+            }
+            return poly;
+        }
+
+        const ecCountPerBlock = ecBytesPerBlock / numBlocks;
+        const dataCountPerBlock = totalDataBytes / numBlocks;
+        const gen = getGeneratorPoly(ecCountPerBlock);
+
+        function calcEC(dataBlock) {
+            const ec = new Array(ecCountPerBlock).fill(0);
+            for (let i = 0; i < dataBlock.length; i++) {
+                const factor = dataBlock[i] ^ ec[0];
+                ec.shift();
+                ec.push(0);
+                for (let j = 0; j < ecCountPerBlock; j++) {
+                    ec[j] ^= gmul(gen[j], factor);
+                }
+            }
+            return ec;
+        }
+
+        const dataBlocks = [];
+        const ecBlocks = [];
+        for (let b = 0; b < numBlocks; b++) {
+            const d = dataBytes.slice(b * dataCountPerBlock, (b + 1) * dataCountPerBlock);
+            dataBlocks.push(d);
+            ecBlocks.push(calcEC(d));
+        }
+
+        const finalBytes = [];
+        for (let i = 0; i < dataCountPerBlock; i++) {
+            for (let b = 0; b < numBlocks; b++) finalBytes.push(dataBlocks[b][i]);
+        }
+        for (let i = 0; i < ecCountPerBlock; i++) {
+            for (let b = 0; b < numBlocks; b++) finalBytes.push(ecBlocks[b][i]);
+        }
+
+        const matrix = Array.from({ length: size }, () => Array(size).fill(null));
+        const isReserved = Array.from({ length: size }, () => Array(size).fill(false));
+
+        function setModule(r, c, val) {
+            matrix[r][c] = val ? 1 : 0;
+            isReserved[r][c] = true;
+        }
+
+        function addFinder(r0, c0) {
+            for (let r = -1; r <= 7; r++) {
+                for (let c = -1; c <= 7; c++) {
+                    const row = r0 + r;
+                    const col = c0 + c;
+                    if (row >= 0 && row < size && col >= 0 && col < size) {
+                        const isBorder = (r === 0 || r === 6 || c === 0 || c === 6);
+                        const isCenter = (r >= 2 && r <= 4 && c >= 2 && c <= 4);
+                        const isFinder = (r >= 0 && r <= 6 && c >= 0 && c <= 6);
+                        setModule(row, col, isFinder && (isBorder || isCenter));
+                    }
+                }
+            }
+        }
+        addFinder(0, 0);
+        addFinder(0, size - 7);
+        addFinder(size - 7, 0);
+
+        if (alignPos.length > 0) {
+            for (const r of alignPos) {
+                for (const c of alignPos) {
+                    if (isReserved[r][c]) continue;
+                    for (let dr = -2; dr <= 2; dr++) {
+                        for (let dc = -2; dc <= 2; dc++) {
+                            const isBorder = Math.abs(dr) === 2 || Math.abs(dc) === 2;
+                            const isCenter = dr === 0 && dc === 0;
+                            setModule(r + dr, c + dc, isBorder || isCenter);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (let i = 8; i < size - 8; i++) {
+            if (!isReserved[6][i]) setModule(6, i, i % 2 === 0);
+            if (!isReserved[i][6]) setModule(i, 6, i % 2 === 0);
+        }
+
+        setModule(4 * version + 9, 8, true);
+
+        for (let i = 0; i < 9; i++) {
+            if (!isReserved[8][i]) isReserved[8][i] = true;
+            if (!isReserved[i][8]) isReserved[8][i] = true;
+        }
+        for (let i = 0; i < 8; i++) {
+            if (!isReserved[8][size - 1 - i]) isReserved[8][size - 1 - i] = true;
+            if (!isReserved[size - 1 - i][8]) isReserved[size - 1 - i] = true;
+        }
+
+        let bitIndex = 0;
+        const finalBits = [];
+        for (const fb of finalBytes) {
+            for (let j = 7; j >= 0; j--) finalBits.push((fb >> j) & 1);
+        }
+
+        let dir = -1;
+        let col = size - 1;
+        while (col > 0) {
+            if (col === 6) col--;
+            for (let i = 0; i < size; i++) {
+                const row = dir === -1 ? size - 1 - i : i;
+                for (let c = 0; c < 2; c++) {
+                    const curCol = col - c;
+                    if (!isReserved[row][curCol]) {
+                        let bit = bitIndex < finalBits.length ? finalBits[bitIndex++] : 0;
+                        if ((row + curCol) % 2 === 0) bit ^= 1;
+                        matrix[row][curCol] = bit;
+                    }
+                }
+            }
+            dir = -dir;
+            col -= 2;
+        }
+
+        const formatBits = [1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0];
+        const tlCoords = [
+            [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8],
+            [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8]
+        ];
+        for (let i = 0; i < 15; i++) {
+            const [r, c] = tlCoords[i];
+            matrix[r][c] = formatBits[i];
+        }
+        for (let i = 0; i < 7; i++) matrix[size - 1 - i][8] = formatBits[i];
+        for (let i = 0; i < 8; i++) matrix[8][size - 8 + i] = formatBits[7 + i];
+
+        let pathD = '';
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                if (matrix[r][c] === 1) {
+                    pathD += `M${c},${r}h1v1h-1z `;
+                }
+            }
+        }
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#ffffff"/><path d="${pathD}" fill="#000000"/></svg>`;
+    }
+
+    function printInventorySticker(item) {
+        if (!item) return;
+        if (stickerInvNumberEl) stickerInvNumberEl.textContent = item.inventory_number || '';
+        if (stickerInvNameEl) stickerInvNameEl.textContent = item.name || '';
+        if (stickerInvPlaceEl) {
+            stickerInvPlaceEl.textContent = item.workplace_code ? `Место: ${item.workplace_code}` : 'Склад';
+        }
+        if (stickerQrContainerEl) {
+            stickerQrContainerEl.innerHTML = createQRCodeSvg(item.inventory_number || String(item.id));
+        }
+        window.print();
+    }
+
     initCookieBanner();
+    if (state.auth && (state.auth.is_admin || state.auth.is_mto)) {
+        loadInventory();
+    } else if (state.view === 'inventory') {
+        loadInventory();
+    }
     render();
     loadWorkdayStatus();
 })();

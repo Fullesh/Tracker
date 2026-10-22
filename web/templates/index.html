@@ -31,6 +31,10 @@
                 <svg viewBox="0 0 24 24" class="nav-icon"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
                 Сотрудники
             </a>
+            <a class="nav-item" href="#inventory" data-view="inventory" id="inventoryNavBtn" hidden>
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M20 2H4c-1 0-2 1-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1-1-2-2-2zm-1 18H5V9h14v11zm1-13H4V4h16v3z"/><path d="M9 12h6v2H9z"/></svg>
+                Инвентаризация
+            </a>
             <a class="nav-item" href="/constructor" id="constructorNavBtn">
                 <svg viewBox="0 0 24 24" class="nav-icon"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                 Конструктор карт
@@ -106,6 +110,34 @@
             <button class="btn btn--ghost" id="resetEmpFilters" type="button">Сбросить</button>
         </section>
 
+        <!-- Фильтры инвентаря -->
+        <section class="filters" id="inventoryFilters" hidden>
+            <label class="select">
+                <span class="select__label">Статус</span>
+                <select id="filterInvStatus">
+                    <option value="all">Все статусы</option>
+                    <option value="assigned">В работе</option>
+                    <option value="storage">На складе</option>
+                    <option value="repair">В ремонте</option>
+                    <option value="decommissioned">Списано</option>
+                </select>
+            </label>
+            <label class="select">
+                <span class="select__label">Категория</span>
+                <select id="filterInvCategory">
+                    <option value="">Все категории</option>
+                    <option value="Монитор">Мониторы</option>
+                    <option value="Компьютер">Компьютеры</option>
+                    <option value="Ноутбук">Ноутбуки</option>
+                    <option value="Оргтехника">Оргтехника</option>
+                    <option value="Сетевое оборудование">Сетевое оборудование</option>
+                    <option value="Мебель">Мебель</option>
+                    <option value="Другое">Другое</option>
+                </select>
+            </label>
+            <button class="btn btn--ghost" id="resetInvFilters" type="button">Сбросить</button>
+        </section>
+
         <section class="board" id="board"></section>
 
         <!-- Карта офиса -->
@@ -156,6 +188,30 @@
             <div class="my-tasks-grid" id="myTasksGrid"></div>
             <div class="my-tasks-empty" id="myTasksEmpty" hidden>
                 <p>У вас пока нет задач в этом разделе</p>
+            </div>
+        </section>
+
+        <!-- Раздел: Инвентаризация -->
+        <section class="inventory-view" id="inventoryView" hidden>
+            <div class="inventory-table-container">
+                <table class="inventory-table">
+                    <thead>
+                        <tr>
+                            <th>Инв. номер</th>
+                            <th>Наименование</th>
+                            <th>Категория / Тип</th>
+                            <th>Статус</th>
+                            <th>Рабочее место</th>
+                            <th>Сотрудник</th>
+                            <th>Заметки</th>
+                            <th class="inventory-actions-th">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryTableBody"></tbody>
+                </table>
+            </div>
+            <div class="inventory-empty" id="inventoryEmpty" hidden>
+                <p>Оборудование по выбранным критериям не найдено</p>
             </div>
         </section>
     </main>
@@ -254,9 +310,100 @@
     </form>
 </div>
 
+<!-- Модальное окно инвентаря (создание и редактирование) -->
+<div class="modal" id="inventoryModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <form class="modal__dialog modal__dialog--wide" id="inventoryForm" autocomplete="off">
+        <div class="modal__header">
+            <h2 id="invModalTitle">Новое оборудование</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <input type="hidden" name="id">
+            <div class="grid-2">
+                <label class="field">
+                    <span class="field__label">Наименование <span class="req">*</span></span>
+                    <input class="input" name="name" required maxlength="200" placeholder="Например: Монитор Dell UltraSharp 27">
+                </label>
+                <label class="field">
+                    <span class="field__label">Категория <span class="req">*</span></span>
+                    <select class="input" name="category" id="invCategorySelect" required>
+                        <option value="Монитор">Монитор</option>
+                        <option value="Компьютер">Компьютер</option>
+                        <option value="Ноутбук">Ноутбук</option>
+                        <option value="Оргтехника">Оргтехника</option>
+                        <option value="Сетевое оборудование">Сетевое оборудование</option>
+                        <option value="Мебель">Мебель</option>
+                        <option value="Другое">Другое</option>
+                    </select>
+                </label>
+            </div>
+            <div class="grid-2">
+                <label class="field">
+                    <span class="field__label">Код типа <span class="req">*</span></span>
+                    <input class="input" name="type_code" id="invTypeCodeInput" required maxlength="10" placeholder="MO, PC, NB, PR, NW, CH...">
+                </label>
+                <label class="field">
+                    <span class="field__label">Статус <span class="req">*</span></span>
+                    <select class="input" name="status" id="invStatusSelect" required>
+                        <option value="assigned">В работе</option>
+                        <option value="storage">На складе</option>
+                        <option value="repair">В ремонте</option>
+                        <option value="decommissioned">Списано</option>
+                    </select>
+                </label>
+            </div>
+            <div class="grid-2">
+                <label class="field">
+                    <span class="field__label">Рабочее место</span>
+                    <input class="input" name="workplace_code" id="invWorkplaceInput" list="invWorkplaceList" placeholder="Например: 9-301 или пусто для склада">
+                    <datalist id="invWorkplaceList"></datalist>
+                </label>
+                <label class="field">
+                    <span class="field__label">Ответственный сотрудник</span>
+                    <select class="input" name="employee_id" id="invEmployeeSelect">
+                        <option value="">Не назначен</option>
+                    </select>
+                </label>
+            </div>
+            <label class="field">
+                <span class="field__label">Инвентарный номер</span>
+                <input class="input" name="inventory_number" id="invNumberInput" placeholder="Оставьте пустым для автогенерации (например INV_MO_9-301_01)">
+            </label>
+            <label class="field">
+                <span class="field__label">Заметки / Характеристики</span>
+                <textarea class="input input--area" name="notes" rows="3" placeholder="Серийный номер, комплектация, особенности"></textarea>
+            </label>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-left">
+                <button class="btn btn--danger-ghost" type="button" id="invDeleteBtn" hidden>Удалить</button>
+                <button class="btn btn--ghost" type="button" id="invPrintStickerBtn" hidden>Печать наклейки</button>
+            </div>
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--action" type="submit" id="invSaveBtn">Сохранить</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Контейнер для термопечати наклейки 50x30 мм -->
+<div class="sticker-print-area" id="stickerPrintArea" hidden>
+    <div class="sticker-content">
+        <div class="sticker-qr" id="stickerQrContainer"></div>
+        <div class="sticker-info">
+            <div class="sticker-brand">PTRACKER МТО</div>
+            <div class="sticker-number" id="stickerInvNumber"></div>
+            <div class="sticker-name" id="stickerInvName"></div>
+            <div class="sticker-place" id="stickerInvPlace"></div>
+        </div>
+    </div>
+</div>
+
 <!-- Предупреждение о сборе Cookie -->
 <aside class="cookie-banner" id="cookieBanner" hidden aria-live="polite">
-    <div class="cookie-banner__icon" aria-hidden="true">🍪</div>
+    <div class="cookie-banner__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1zm-2 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm-3 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm7 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z"/></svg></div>
     <div class="cookie-banner__content">
         <div class="cookie-banner__title">Предупреждение о сборе cookie</div>
         <p class="cookie-banner__text">Системные администраторы отобрали Ваши cookie, но Вы можете взять ещё на кухне.</p>

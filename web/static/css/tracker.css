@@ -1367,6 +1367,263 @@ select.input {
     font-size: 14px;
 }
 
+/* ---------- Инвентаризация ---------- */
+.inventory-view {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.inventory-table-container {
+    background: var(--bg-surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    box-shadow: var(--shadow-card);
+    overflow-x: auto;
+}
+
+.inventory-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    text-align: left;
+}
+
+.inventory-table th {
+    background: #faf9f8;
+    color: var(--text-secondary);
+    font-weight: 600;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+}
+
+.inventory-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+.inventory-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.inventory-table tbody tr:hover {
+    background: #fbfbfa;
+}
+
+.inventory-num {
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--bg-control);
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.inventory-name {
+    font-weight: 600;
+}
+
+.inventory-type-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: #eef2ff;
+    color: #3b5bdb;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.inv-status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.inv-status--assigned {
+    background: #e6f4ea;
+    color: #137333;
+}
+
+.inv-status--storage {
+    background: #e8f0fe;
+    color: #1a73e8;
+}
+
+.inv-status--repair {
+    background: #fef7e0;
+    color: #b06000;
+}
+
+.inv-status--decommissioned {
+    background: #f1f3f4;
+    color: #5f6368;
+    text-decoration: line-through;
+}
+
+.inventory-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.inventory-actions-th {
+    width: 1%;
+    text-align: right;
+}
+
+.btn--icon-sm {
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+.inventory-empty {
+    padding: 48px 16px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+    background: var(--bg-surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+}
+
+.modal__footer-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ---------- Термопечать наклейки 50x30 мм ---------- */
+@media screen {
+    .sticker-print-area {
+        display: none !important;
+    }
+}
+
+@page {
+    size: 50mm 30mm;
+    margin: 0;
+}
+
+@media print {
+    html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        width: 50mm !important;
+        height: 30mm !important;
+        overflow: hidden !important;
+    }
+    body * {
+        visibility: hidden !important;
+    }
+    .sticker-print-area, .sticker-print-area * {
+        visibility: visible !important;
+    }
+    .sticker-print-area {
+        display: block !important;
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 50mm !important;
+        height: 30mm !important;
+        padding: 2.5mm 3mm !important;
+        box-sizing: border-box !important;
+        background: #fff !important;
+        color: #000 !important;
+    }
+    .sticker-content {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        height: 100% !important;
+        gap: 2.5mm !important;
+    }
+    .sticker-qr {
+        width: 24mm !important;
+        height: 24mm !important;
+        flex-shrink: 0 !important;
+    }
+    .sticker-qr svg {
+        width: 100% !important;
+        height: 100% !important;
+        display: block !important;
+    }
+    .sticker-info {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        flex: 1 !important;
+        min-width: 0 !important;
+        font-family: Arial, Helvetica, sans-serif !important;
+        overflow: hidden !important;
+    }
+    .sticker-brand {
+        font-size: 6.5pt !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.3px !important;
+        color: #555 !important;
+        margin-bottom: 1mm !important;
+    }
+    .sticker-number {
+        font-size: 8.5pt !important;
+        font-weight: 900 !important;
+        word-break: break-all !important;
+        line-height: 1.15 !important;
+        margin-bottom: 1mm !important;
+    }
+    .sticker-name {
+        font-size: 7pt !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        line-height: 1.2 !important;
+    }
+    .sticker-place {
+        font-size: 7.5pt !important;
+        font-weight: 700 !important;
+        margin-top: 1mm !important;
+    }
+}
+
+.emp-inventory-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.emp-inventory-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--bg-control);
+    border-radius: var(--radius-s);
+}
+
+.emp-inventory-item__info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+
+
 
 
 
