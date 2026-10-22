@@ -13,18 +13,6 @@ type loginPayload struct {
 	Password string
 }
 
-func (h *Handler) currentUser(r *http.Request) *domain.User {
-	cookie, err := r.Cookie("session")
-	if err != nil || cookie.Value == "" {
-		return nil
-	}
-	var user domain.User
-	if err := h.db.Where("username = ?", cookie.Value).First(&user).Error; err == nil {
-		return &user
-	}
-	return nil
-}
-
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var payload loginPayload
 
@@ -115,4 +103,16 @@ func (h *Handler) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 		// Если админ — передаём управление дальше целевому обработчику
 		next(w, r)
 	}
+}
+
+func (h *Handler) currentUser(r *http.Request) *domain.User {
+	cookie, err := r.Cookie("session")
+	if err != nil || cookie.Value == "" {
+		return nil
+	}
+	var user domain.User
+	if err := h.db.Where("username = ?", cookie.Value).First(&user).Error; err == nil {
+		return &user
+	}
+	return nil
 }
