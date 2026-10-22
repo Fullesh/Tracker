@@ -136,3 +136,26 @@ func (h *Handler) CreateFloor(w http.ResponseWriter, r *http.Request) {
 		"name":     payload.Name,
 	})
 }
+
+func (h *Handler) DeleteFloor(w http.ResponseWriter, r *http.Request) {
+	var count int64
+	idStr := r.PathValue("id")
+	floorID, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Некорректный ID этажа", http.StatusBadRequest)
+		return
+	}
+	h.db.Model(&domain.Floor{}).Count(&count)
+	if count <= 1 {
+		http.Error(w, "Нельзя удалить единственный этаж", http.StatusBadRequest)
+		return
+	}
+	if err := h.db.Delete(&domain.Floor{}, floorID).Error; err != nil {
+		http.Error(w, "Ошибка при удалении этажа: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+	})
+}
