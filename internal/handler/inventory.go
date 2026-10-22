@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 type inventoryPayload struct {
@@ -47,7 +48,68 @@ func (h *Handler) GetInventory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateInventoryItem(w http.ResponseWriter, r *http.Request) {
-	return
+	var payload inventoryPayload
+	var wpCode string
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Некорректный JSON", http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(payload.WorkplaceCode) != "" {
+		wpCode = strings.ToUpper(strings.TrimSpace(payload.WorkplaceCode))
+	} else {
+		wpCode = "STOCK"
+	}
+
+	if strings.TrimSpace(payload.Name) == "" {
+		http.Error(w, "Не указано наименование оборудования", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(payload.TypeCode) == "" {
+		http.Error(w, "Не указан тип оборудования", http.StatusBadRequest)
+		return
+	}
+
+	typeCode := strings.ToUpper(strings.TrimSpace(payload.TypeCode))
+	prefix := fmt.Sprintf("INV_%s_%s", typeCode, wpCode)
+
+	invNumber := strings.ToUpper(strings.TrimSpace(payload.InventoryNumber))
+	if invNumber == "" {
+		var count int64
+		h.db.Model(&domain.InventoryItem{}).Where("inventory_number LIKE ?", prefix+"%").Count(&count)
+		invNumber = fmt.Sprintf("%s_%02d", prefix, count+1)
+	}
+
+	status := strings.TrimSpace(payload.Status)
+	if status == "" {
+		if wpCode != "STOCK" {
+			status = "assigned"
+		} else {
+			status = "storage"
+		}
+	}
+
+	item := domain.InventoryItem{
+		InventoryNumber: invNumber,
+		Name:            strings.TrimSpace(payload.Name),
+		Category:        payload.Category,
+		TypeCode:        typeCode,
+		Status:          status,
+		WorkplaceCode:   wpCode,
+		EmployeeID:      payload.EmployeeID,
+		Notes:           payload.Notes,
+	}
+	if err := h.db.Create(&item).Error; err != nil {
+		http.Error(w, "Ошибка сохранения оборудования: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"item":    item,
+	})
 }
 
 func (h *Handler) UpdateInventoryItem(w http.ResponseWriter, r *http.Request) {
