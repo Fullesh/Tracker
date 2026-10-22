@@ -8,12 +8,12 @@
 
     const AVATAR_COLORS = ['#0077ff', '#fc3f1d', '#6b3fd4', '#24803c', '#ff9900', '#00a3bf'];
 
-    const byId = (list) => Object.fromEntries(list.map((x) => [String(x.id), x]));
+    const byId = (list) => Object.fromEntries((list || []).filter(Boolean).map((x) => [String(x.id), x]));
     const assigneesById = byId(CONFIG.assignees);
     const prioritiesById = byId(CONFIG.priorities);
     const severitiesById = byId(CONFIG.severities);
     const floorsById = byId(CONFIG.floors);
-    const workplaces = CONFIG.floors.flatMap((f) => f.workplaces);
+    const workplaces = (CONFIG.floors || []).flatMap((f) => f.workplaces || []);
     const workplacesById = byId(workplaces);
 
     const priorityOrder = Object.fromEntries(CONFIG.priorities.map((p, i) => [p.id, i]));
@@ -137,6 +137,13 @@
 
     function placeTitle(wp) {
         return wp.employee || wp.label || wp.room;
+    }
+
+    function formatDeskLabel(label) {
+        if (!label) return '';
+        const s = String(label).trim();
+        if (s.toLowerCase() === 'место переговоров') return 'Переговорная';
+        return s.length > 14 ? s.slice(0, 13) + '…' : s;
     }
 
     function isOpen(task) {
@@ -285,6 +292,17 @@
         const canAccessMTO = !!(state.auth.is_admin || state.auth.is_mto);
         const invNavBtn = document.getElementById('inventoryNavBtn');
         if (invNavBtn) invNavBtn.hidden = !canAccessMTO;
+
+        const searchEl = document.getElementById('searchInput');
+        if (searchEl) {
+            if (isInventory) {
+                searchEl.placeholder = 'Поиск по номеру, названию, месту...';
+            } else if (isEmployees) {
+                searchEl.placeholder = 'Поиск по ФИО, должности, отделу...';
+            } else {
+                searchEl.placeholder = 'Поиск по задачам, местам или людям';
+            }
+        }
 
         if (isInventory) {
             pageTitleEl.textContent = 'Инвентаризация';
@@ -464,7 +482,7 @@
                 avatar(id),
                 el('span', { class: 'person__name' }, [
                     document.createTextNode(u.name),
-                    u.role ? el('span', { class: 'person__role', text: u.role }) : null,
+                    u.role ? el('span', { class: 'person__role', title: u.role, text: u.role }) : null,
                 ]),
                 el('span', { class: 'person__count', text: count }),
             ]));
@@ -848,12 +866,13 @@
 
     function renderMap(tasks) {
         const byPlace = openTasksByPlace(tasks);
-        const floor = floorsById[state.floor];
+        const floor = floorsById[state.floor] || CONFIG.floors[0] || { id: 1, name: 'Этаж', width: 1200, height: 700, workplaces: [] };
+        const floorWorkplaces = floor.workplaces || [];
 
         // Вкладки этажей с количеством открытых задач
         floorTabsEl.innerHTML = '';
-        CONFIG.floors.forEach((f) => {
-            const count = f.workplaces.reduce((n, wp) => n + (byPlace[wp.id]?.length || 0), 0);
+        (CONFIG.floors || []).forEach((f) => {
+            const count = (f.workplaces || []).reduce((n, wp) => n + (byPlace[wp.id]?.length || 0), 0);
             floorTabsEl.append(el('button', {
                 class: `floor-tab${String(f.id) === state.floor ? ' floor-tab--active' : ''}`,
                 type: 'button',
@@ -910,7 +929,7 @@
         const q = state.filters.query.trim().toLowerCase();
         const active = filtersActive();
 
-        floor.workplaces.forEach((wp) => {
+        floorWorkplaces.forEach((wp) => {
             const open = byPlace[wp.id] || [];
             const worst = worstSeverity(open);
             const status = worst ? `st-${worst}` : 'st-ok';
@@ -930,7 +949,7 @@
                 svg('rect', { class: 'desk__body', x: wp.x - w / 2, y: wp.y - h / 2, width: w, height: h, rx: 10 }),
                 svg('path', { class: 'desk__icon', d: KIND_ICON[wp.kind] || KIND_ICON.pc, transform: `translate(${wp.x - 10} ${wp.y - 21}) scale(0.84)` }),
                 svg('text', { class: 'desk__id', x: wp.x, y: wp.y + 17, text: wp.id }),
-                svg('text', { class: 'desk__name', x: wp.x, y: wp.y + h / 2 + 18, text: wp.label || '' }),
+                svg('text', { class: 'desk__name', x: wp.x, y: wp.y + h / 2 + 16, text: formatDeskLabel(wp.label) }),
                 open.length ? svg('g', { class: 'desk__badge' }, [
                     svg('circle', { cx: wp.x + w / 2 - 2, cy: wp.y - h / 2 + 2, r: 11 }),
                     svg('text', { x: wp.x + w / 2 - 2, y: wp.y - h / 2 + 2, text: open.length }),
@@ -952,16 +971,17 @@
     function renderPanel(tasks, byPlace, floor) {
         panelEl.innerHTML = '';
         const wp = workplacesById[state.selectedPlace];
+        const floorWorkplaces = (floor && floor.workplaces) || [];
 
         if (!wp) {
             // Сводка по этажу: проблемные места
-            const problems = floor.workplaces
+            const problems = floorWorkplaces
                 .filter((p) => byPlace[p.id]?.length)
                 .sort((a, b) => severityOrder[worstSeverity(byPlace[a.id])] - severityOrder[worstSeverity(byPlace[b.id])]);
 
             panelEl.append(el('div', {}, [
                 el('h3', { class: 'panel__title', text: floor.name }),
-                el('div', { class: 'panel__sub', text: `Мест: ${floor.workplaces.length} · с проблемами: ${problems.length}` }),
+                el('div', { class: 'panel__sub', text: `Мест: ${floorWorkplaces.length} · с проблемами: ${problems.length}` }),
             ]));
 
             if (!problems.length) {
@@ -997,7 +1017,7 @@
             el('div', { class: `panel__status ${worst ? `st-${worst}` : 'st-ok'}`, html: `<svg viewBox="0 0 24 24"><path d="${KIND_ICON[wp.kind] || KIND_ICON.pc}"/></svg>` }),
             el('div', {}, [
                 el('h3', { class: 'panel__title', text: `${wp.id} · ${placeTitle(wp)}` }),
-                el('div', { class: 'panel__sub', text: `${KIND_NAME[wp.kind] || 'Рабочее место'} · ${wp.room} · ${floorsById[wp.floor].name}` }),
+                el('div', { class: 'panel__sub', text: `${KIND_NAME[wp.kind] || 'Рабочее место'} · ${wp.room} · ${floorsById[wp.floor]?.name || ''}` }),
             ]),
             el('button', { class: 'icon-btn', type: 'button', title: 'Закрыть', text: '×', style: 'margin-left:auto', onclick: () => selectPlace(wp.id) }),
         ]));
@@ -1034,9 +1054,12 @@
 
     // Рабочие места сгруппированы по этажам
     form.workplace.append(el('option', { value: '', text: 'Не указано' }));
-    CONFIG.floors.forEach((f) => {
-        form.workplace.append(el('optgroup', { label: f.name },
-            f.workplaces.map((wp) => el('option', { value: wp.id, text: `${wp.id} · ${placeTitle(wp)} (${wp.room})` }))));
+    (CONFIG.floors || []).forEach((f) => {
+        const wps = f.workplaces || [];
+        if (wps.length > 0) {
+            form.workplace.append(el('optgroup', { label: f.name },
+                wps.map((wp) => el('option', { value: wp.id, text: `${wp.id} · ${placeTitle(wp)} (${wp.room})` }))));
+        }
     });
 
     function openModal(task, preset = {}) {
@@ -1201,6 +1224,13 @@
         return list;
     }
 
+    function canEditEmployee(emp) {
+        if (!emp) return false;
+        if (state.auth && state.auth.is_admin) return true;
+        if (state.auth && state.auth.is_authenticated && state.auth.employee_id && Number(state.auth.employee_id) === Number(emp.id)) return true;
+        return Boolean(state.auth && state.auth.is_authenticated && emp.can_edit);
+    }
+
     function renderEmployees() {
         if (!employeesGridEl) return;
         const list = filteredEmployees();
@@ -1276,7 +1306,7 @@
             } else {
                 footerChildren.push(el('span', { text: '' }));
             }
-            if (emp.can_edit) {
+            if (canEditEmployee(emp)) {
                 footerChildren.push(el('span', { class: 'emp-card__badge-edit', text: 'Редактировать' }));
             }
             const footer = el('div', { class: 'emp-card__footer' }, footerChildren);
@@ -1361,6 +1391,7 @@
     function openEmployeeModal(emp, isEditMode = false) {
         if (!employeeModalEl || !employeeDialogEl) return;
         employeeDialogEl.innerHTML = '';
+        const editable = canEditEmployee(emp);
 
         if (!isEditMode) {
             // ----- РЕЖИМ ПРОСМОТРА -----
@@ -1471,7 +1502,7 @@
 
             // Плашка прав доступа
             let permBanner;
-            if (emp.can_edit) {
+            if (editable) {
                 permBanner = el('div', { class: 'emp-modal__perm-banner emp-modal__perm-banner--ok' }, [
                     el('span', { text: 'Вы можете редактировать эту карточку (как администратор системы или владелец).' }),
                     el('button', {
@@ -1503,7 +1534,7 @@
                 el('div', {}),
                 el('div', { class: 'modal__footer-right' }, [
                     el('button', { class: 'btn btn--ghost', type: 'button', text: 'Закрыть', onclick: closeEmployeeModal }),
-                    emp.can_edit ? el('button', { class: 'btn btn--action', type: 'button', text: 'Редактировать', onclick: () => openEmployeeModal(emp, true) }) : null,
+                    editable ? el('button', { class: 'btn btn--action', type: 'button', text: 'Редактировать', onclick: () => openEmployeeModal(emp, true) }) : null,
                 ].filter(Boolean))
             ]);
 
@@ -1519,8 +1550,7 @@
             ]);
 
             const errBanner = el('div', {
-                class: 'emp-modal__perm-banner emp-modal__perm-banner--info',
-                style: 'color: #d42a0c; background: #ffe0db; border-color: #fc3f1d; margin-bottom: 12px;',
+                class: 'emp-modal__perm-banner emp-modal__perm-banner--error',
                 hidden: true
             });
 
@@ -1635,9 +1665,8 @@
                 });
 
                 const genPassBtn = el('button', {
-                    class: 'btn btn--ghost btn--small',
+                    class: 'btn-gen-pass',
                     type: 'button',
-                    style: 'font-size: 11px; padding: 2px 8px;',
                     text: 'Сгенерировать пароль',
                     onclick: () => {
                         const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%';
@@ -1646,23 +1675,25 @@
                             pass += chars.charAt(Math.floor(Math.random() * chars.length));
                         }
                         passwordInput.value = pass;
+                        passwordInput.focus();
                     }
                 });
 
                 bodyFields.push(el('div', {
-                    class: 'emp-modal__auth-box',
-                    style: 'background: var(--bg-control); border-radius: 8px; padding: 12px; margin-top: 12px;'
+                    class: 'emp-modal__auth-box'
                 }, [
-                    el('div', { style: 'font-weight: 600; font-size: 13px; margin-bottom: 8px;' }, [
+                    el('div', { class: 'emp-modal__auth-title' }, [
                         document.createTextNode('Учётная запись (доступ в систему)')
                     ]),
                     el('div', { class: 'grid-2' }, [
-                        el('label', { class: 'field' }, [
-                            el('span', { class: 'field__label', text: 'Логин (username)' }),
+                        el('div', { class: 'field' }, [
+                            el('div', { class: 'field__label-row' }, [
+                                el('span', { class: 'field__label', text: 'Логин (username)' })
+                            ]),
                             el('input', { class: 'input', name: 'username', value: userLogin, placeholder: 'например, ivanov' })
                         ]),
-                        el('label', { class: 'field' }, [
-                            el('div', { style: 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;' }, [
+                        el('div', { class: 'field' }, [
+                            el('div', { class: 'field__label-row' }, [
                                 el('span', { class: 'field__label', text: 'Пароль' }),
                                 genPassBtn
                             ]),
@@ -1759,6 +1790,8 @@
             editFloorBtn.style.display = isAdmin ? '' : 'none';
         }
 
+        userPillEl.classList.toggle('user-pill--guest', !state.auth.is_authenticated);
+
         if (state.auth.is_authenticated) {
             const username = state.auth.username || 'Пользователь';
             const isAdmin = state.auth.is_admin;
@@ -1781,7 +1814,7 @@
         } else {
             const loginBtn = el('button', {
                 class: 'btn btn--ghost',
-                style: 'padding: 4px 10px; font-size: 13px; height: 32px;',
+                style: 'padding: 4px 12px; font-size: 13px; height: 34px;',
                 type: 'button',
                 text: 'Войти',
                 onclick: openLoginModal
@@ -1849,6 +1882,7 @@
                     is_authenticated: true,
                     username: res.user.username,
                     is_admin: res.user.is_admin,
+                    is_mto: Boolean(res.user.is_mto || res.user.is_admin),
                 };
                 closeLoginModal();
                 await refreshEmployees();
@@ -1868,10 +1902,11 @@
     async function refreshEmployees() {
         try {
             const resp = await fetch('/api/employees/');
+            if (!resp.ok) return;
             const data = await resp.json();
             if (data && data.employees) {
                 state.employees = data.employees;
-                state.departments = data.departments;
+                state.departments = data.departments || state.departments;
                 if (data.auth) state.auth = data.auth;
                 initEmployeeFilters();
                 populateCreatorList();
@@ -1978,10 +2013,33 @@
         render();
     }
 
+    const appSidebarEl = document.getElementById('appSidebar');
+    const sidebarOverlayEl = document.getElementById('sidebarOverlay');
+    const mobileMenuBtnEl = document.getElementById('mobileMenuBtn');
+
+    function closeMobileSidebar() {
+        if (appSidebarEl) appSidebarEl.classList.remove('sidebar--open');
+        if (sidebarOverlayEl) sidebarOverlayEl.hidden = true;
+    }
+
+    if (mobileMenuBtnEl && appSidebarEl) {
+        mobileMenuBtnEl.addEventListener('click', () => {
+            const isOpen = appSidebarEl.classList.toggle('sidebar--open');
+            if (sidebarOverlayEl) sidebarOverlayEl.hidden = !isOpen;
+        });
+    }
+    if (sidebarOverlayEl) {
+        sidebarOverlayEl.addEventListener('click', closeMobileSidebar);
+    }
+
     document.getElementById('toggleViewBtn').addEventListener('click', () =>
         setView(state.view === 'map' ? 'board' : 'map'));
     document.querySelectorAll('.nav-item[data-view]').forEach((n) =>
-        n.addEventListener('click', (e) => { e.preventDefault(); setView(n.dataset.view); }));
+        n.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeMobileSidebar();
+            setView(n.dataset.view);
+        }));
     window.addEventListener('hashchange', () => {
         state.view = parseHashView();
         if (state.view === 'inventory' && !state.inventoryLoaded) {
@@ -2396,6 +2454,7 @@
                     <div class="inventory-actions">
                         <button class="btn btn--ghost btn--icon-sm" type="button" data-inv-action="print" title="Печать наклейки 50x30 мм">Печать</button>
                         <button class="btn btn--ghost btn--icon-sm" type="button" data-inv-action="edit">Изменить</button>
+                        <button class="btn btn--danger-ghost btn--icon-sm" type="button" data-inv-action="delete" title="Удалить оборудование">Удалить</button>
                     </div>
                 </td>
             `;
@@ -2408,6 +2467,11 @@
             tr.querySelector('[data-inv-action="edit"]').addEventListener('click', (e) => {
                 e.stopPropagation();
                 openInventoryModal(item);
+            });
+
+            tr.querySelector('[data-inv-action="delete"]').addEventListener('click', (e) => {
+                e.stopPropagation();
+                openDeleteInventoryModal(item);
             });
 
             tr.addEventListener('dblclick', () => {
@@ -2555,14 +2619,45 @@
         });
     }
 
-    if (invDeleteBtnEl) {
-        invDeleteBtnEl.addEventListener('click', async () => {
-            if (!currentEditingInvItem) return;
-            const ok = confirm(`Удалить оборудование "${currentEditingInvItem.name}" (${currentEditingInvItem.inventory_number})?`);
-            if (!ok) return;
+    // Модальное окно подтверждения удаления оборудования
+    const deleteInventoryModal = document.getElementById('deleteInventoryModal');
+    const deleteInventoryModalMessage = document.getElementById('deleteInventoryModalMessage');
+    const confirmDeleteInventoryBtn = document.getElementById('confirmDeleteInventoryBtn');
+    let invItemToDelete = null;
+
+    function openDeleteInventoryModal(item) {
+        if (!deleteInventoryModal || !item) return;
+        invItemToDelete = item;
+        if (deleteInventoryModalMessage) {
+            deleteInventoryModalMessage.innerHTML = `Вы действительно хотите удалить оборудование <strong>«${escapeHtml(item.name)}»</strong> (${escapeHtml(item.inventory_number || '')})?`;
+        }
+        deleteInventoryModal.hidden = false;
+    }
+
+    function closeDeleteInventoryModal() {
+        if (deleteInventoryModal) deleteInventoryModal.hidden = true;
+        invItemToDelete = null;
+    }
+
+    if (deleteInventoryModal) {
+        deleteInventoryModal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', closeDeleteInventoryModal);
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !deleteInventoryModal.hidden) {
+                closeDeleteInventoryModal();
+            }
+        });
+    }
+
+    if (confirmDeleteInventoryBtn) {
+        confirmDeleteInventoryBtn.addEventListener('click', async () => {
+            if (!invItemToDelete) return;
+            const item = invItemToDelete;
+            confirmDeleteInventoryBtn.disabled = true;
 
             try {
-                const resp = await fetch(`/api/inventory/${currentEditingInvItem.id}/delete/`, {
+                const resp = await fetch(`/api/inventory/${item.id}/delete/`, {
                     method: 'POST',
                 });
                 const text = await resp.text();
@@ -2577,11 +2672,22 @@
                     return;
                 }
                 showToast('Оборудование удалено', 'success');
+                closeDeleteInventoryModal();
                 closeInventoryModal();
                 await loadInventory();
             } catch (err) {
                 console.error(err);
                 showToast('Ошибка отправки запроса: ' + (err.message || 'Сбой сети'), 'error');
+            } finally {
+                confirmDeleteInventoryBtn.disabled = false;
+            }
+        });
+    }
+
+    if (invDeleteBtnEl) {
+        invDeleteBtnEl.addEventListener('click', () => {
+            if (currentEditingInvItem) {
+                openDeleteInventoryModal(currentEditingInvItem);
             }
         });
     }

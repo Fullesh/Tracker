@@ -18,9 +18,18 @@
     };
 
     // ---------- Состояние редактора ----------
+    const normalizedFloors = (CONFIG.floors || []).map((f) => ({
+        ...f,
+        width: Number(f.width) || 1200,
+        height: Number(f.height) || 700,
+        walls: Array.isArray(f.walls) ? f.walls : [],
+        labels: Array.isArray(f.labels) ? f.labels : [],
+        workplaces: Array.isArray(f.workplaces) ? f.workplaces : [],
+    }));
+
     const state = {
-        floors: CONFIG.floors,
-        activeFloorId: CONFIG.active_floor_id || (CONFIG.floors[0] ? CONFIG.floors[0].id : null),
+        floors: normalizedFloors,
+        activeFloorId: CONFIG.active_floor_id || (normalizedFloors[0] ? normalizedFloors[0].id : null),
         currentTool: 'select', // select, wall, label, pc, printer, meeting, server, delete
         gridSnap: 20,
         selectedItem: null, // { type: 'wall'|'label'|'workplace', index: number, data: object }
@@ -35,7 +44,7 @@
 
         // Масштабирование и панорамирование
         zoom: 1.0,
-        viewBox: { x: 0, y: 0, w: 1000, h: 600 },
+        viewBox: { x: 0, y: 0, w: 1200, h: 700 },
         isSpacePressed: false,
         isPanning: false,
         panStart: { clientX: 0, clientY: 0, startVx: 0, startVy: 0 },
@@ -44,7 +53,7 @@
 
     if (!state.employees || state.employees.length === 0) {
         fetch('/api/employees/')
-            .then((r) => r.json())
+            .then((r) => (r.ok ? r.json() : null))
             .then((data) => {
                 if (data && data.employees) {
                     state.employees = data.employees;
@@ -80,8 +89,21 @@
             .replace(/'/g, '&#039;');
     }
 
+    function formatDeskLabel(label) {
+        if (!label) return '';
+        const s = String(label).trim();
+        if (s.toLowerCase() === 'место переговоров') return 'Переговорная';
+        return s.length > 14 ? s.slice(0, 13) + '…' : s;
+    }
+
     function getCurrentFloor() {
         return state.floors.find((f) => f.id === state.activeFloorId);
+    }
+
+    function getFloorDims(floor = getCurrentFloor()) {
+        const w = (floor && Number(floor.width)) || 1200;
+        const h = (floor && Number(floor.height)) || 700;
+        return { w, h };
     }
 
     // ---------- Утилиты SVG ----------
@@ -117,8 +139,7 @@
         if (Math.abs(clampedZoom - state.zoom) < 0.001) return;
 
         const svgEl = document.getElementById('editorSvg');
-        const baseW = 1000;
-        const baseH = 600;
+        const { w: baseW, h: baseH } = getFloorDims();
 
         if (anchorX == null || anchorY == null) {
             anchorX = state.viewBox.x + state.viewBox.w / 2;
@@ -152,22 +173,30 @@
     }
 
     function resetZoom() {
+        const { w: baseW, h: baseH } = getFloorDims();
         state.zoom = 1.0;
-        state.viewBox = { x: 0, y: 0, w: 1000, h: 600 };
+        state.viewBox = { x: 0, y: 0, w: baseW, h: baseH };
         const svgEl = document.getElementById('editorSvg');
-        svgEl.setAttribute('viewBox', '0 0 1000 600');
+        svgEl.setAttribute('viewBox', `0 0 ${baseW} ${baseH}`);
+        svgEl.style.aspectRatio = `${baseW} / ${baseH}`;
+        const gridBg = svgEl.querySelector('.grid-bg');
+        if (gridBg) {
+            gridBg.setAttribute('width', String(baseW));
+            gridBg.setAttribute('height', String(baseH));
+        }
         updateStatusAndZoomDisplay();
     }
 
     function getSvgCoordinates(e) {
         const svgEl = document.getElementById('editorSvg');
+        const { w: baseW, h: baseH } = getFloorDims();
         const pt = svgEl.createSVGPoint();
         pt.x = e.clientX;
         pt.y = e.clientY;
         const cursorPt = pt.matrixTransform(svgEl.getScreenCTM().inverse());
         const isShift = e.shiftKey;
-        const snappedX = Math.max(0, Math.min(1000, snap(cursorPt.x, state.gridSnap, isShift)));
-        const snappedY = Math.max(0, Math.min(600, snap(cursorPt.y, state.gridSnap, isShift)));
+        const snappedX = Math.max(0, Math.min(baseW, snap(cursorPt.x, state.gridSnap, isShift)));
+        const snappedY = Math.max(0, Math.min(baseH, snap(cursorPt.y, state.gridSnap, isShift)));
         return {
             rawX: Math.round(cursorPt.x),
             rawY: Math.round(cursorPt.y),
@@ -197,6 +226,7 @@
             btn.className = `floor-tab${f.id === state.activeFloorId ? ' floor-tab--active' : ''}`;
             btn.type = 'button';
             btn.textContent = f.name;
+            btn.title = f.name;
             btn.onclick = () => switchFloor(f.id);
             tabsEl.appendChild(btn);
         });
@@ -228,6 +258,10 @@
     function renderCanvas() {
         const floor = getCurrentFloor();
         if (!floor) return;
+
+        floor.walls = floor.walls || [];
+        floor.labels = floor.labels || [];
+        floor.workplaces = floor.workplaces || [];
 
         wallsLayer.innerHTML = '';
         labelsLayer.innerHTML = '';
@@ -315,7 +349,7 @@
                 x: 0,
                 y: deskH / 2 + 16,
             });
-            textName.textContent = wp.label || '';
+            textName.textContent = formatDeskLabel(wp.label);
             g.appendChild(textName);
 
             g.onclick = (e) => handleItemClick('workplace', index, e);
@@ -415,6 +449,7 @@
     });
 
     editorSvg.addEventListener('mousemove', (e) => {
+        const { w: baseW, h: baseH } = getFloorDims();
         // 1. Панорамирование холста
         if (state.isPanning) {
             const screenDx = e.clientX - state.panStart.clientX;
@@ -431,8 +466,8 @@
 
             const marginX = state.viewBox.w * 0.6;
             const marginY = state.viewBox.h * 0.6;
-            newVx = Math.max(-marginX, Math.min(1000 + marginX - state.viewBox.w, newVx));
-            newVy = Math.max(-marginY, Math.min(600 + marginY - state.viewBox.h, newVy));
+            newVx = Math.max(-marginX, Math.min(baseW + marginX - state.viewBox.w, newVx));
+            newVy = Math.max(-marginY, Math.min(baseH + marginY - state.viewBox.h, newVy));
 
             state.viewBox.x = Math.round(newVx);
             state.viewBox.y = Math.round(newVy);
@@ -449,8 +484,8 @@
             const isShift = e.shiftKey;
             const newX = snap(coords.rawX - state.dragOffset.x, state.gridSnap, isShift);
             const newY = snap(coords.rawY - state.dragOffset.y, state.gridSnap, isShift);
-            state.dragTarget.data.x = Math.max(30, Math.min(970, newX));
-            state.dragTarget.data.y = Math.max(30, Math.min(570, newY));
+            state.dragTarget.data.x = Math.max(30, Math.min(baseW - 30, newX));
+            state.dragTarget.data.y = Math.max(30, Math.min(baseH - 30, newY));
             renderCanvas();
             renderInspector();
             return;
@@ -630,7 +665,7 @@
 
         if (!item) {
             inspectorTitle.textContent = 'Свойства объекта';
-            deleteSelectedBtn.style.display = 'none';
+            deleteSelectedBtn.hidden = true;
             inspectorBody.innerHTML = `
                 <div class="inspector__empty">
                     <svg viewBox="0 0 24 24" class="empty-icon"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
@@ -640,7 +675,7 @@
             return;
         }
 
-        deleteSelectedBtn.style.display = 'block';
+        deleteSelectedBtn.hidden = false;
 
         if (item.type === 'workplace') {
             const wp = item.data;
@@ -894,9 +929,9 @@
             tempLayer.innerHTML = '';
 
             if (state.currentTool === 'select') {
-                editorSvg.className = 'editor-svg cursor-default';
+                editorSvg.classList.add('cursor-default');
             } else {
-                editorSvg.className = 'editor-svg';
+                editorSvg.classList.remove('cursor-default');
             }
         };
     });
@@ -1015,40 +1050,81 @@
         };
     }
 
-    // Добавить новый этаж
-    document.getElementById('addFloorBtn').onclick = async () => {
-        const name = prompt('Название нового этажа:', `${state.floors.length + 1} этаж`);
-        if (!name || !name.trim()) return;
+    // Добавить новый этаж через модальное окно
+    const createFloorModal = document.getElementById('createFloorModal');
+    const createFloorForm = document.getElementById('createFloorForm');
+    const createFloorNameInput = document.getElementById('createFloorNameInput');
+    const submitCreateFloorBtn = document.getElementById('submitCreateFloorBtn');
 
-        try {
-            const resp = await fetch('/api/floors/create/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCsrfToken(),
-                },
-                body: JSON.stringify({ name: name.trim() }),
-            });
-            const data = await resp.json();
-            if (data.ok) {
-                const newFloor = {
-                    id: data.floor_id,
-                    name: data.name,
-                    order: state.floors.length + 1,
-                    width: 1000,
-                    height: 600,
-                    walls: [],
-                    labels: [],
-                    workplaces: [],
-                };
-                state.floors.push(newFloor);
-                switchFloor(newFloor.id);
-                showToast(`Создан «${newFloor.name}»`, 'success');
+    function openCreateFloorModal() {
+        if (!createFloorModal) return;
+        createFloorNameInput.value = `${state.floors.length + 1} этаж`;
+        createFloorModal.hidden = false;
+        createFloorNameInput.focus();
+        createFloorNameInput.select();
+    }
+
+    function closeCreateFloorModal() {
+        if (createFloorModal) createFloorModal.hidden = true;
+    }
+
+    if (createFloorModal) {
+        createFloorModal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', closeCreateFloorModal);
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !createFloorModal.hidden) {
+                closeCreateFloorModal();
             }
-        } catch (err) {
-            console.error(err);
-            showToast('Ошибка при создании этажа', 'error');
-        }
+        });
+    }
+
+    if (createFloorForm) {
+        createFloorForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const name = createFloorNameInput.value.trim();
+            if (!name) return;
+
+            if (submitCreateFloorBtn) submitCreateFloorBtn.disabled = true;
+            try {
+                const resp = await fetch('/api/floors/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify({ name }),
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    const newFloor = {
+                        id: data.floor_id,
+                        name: data.name,
+                        order: state.floors.length + 1,
+                        width: 1200,
+                        height: 700,
+                        walls: [],
+                        labels: [],
+                        workplaces: [],
+                    };
+                    state.floors.push(newFloor);
+                    closeCreateFloorModal();
+                    switchFloor(newFloor.id);
+                    showToast(`Создан «${newFloor.name}»`, 'success');
+                } else {
+                    showToast(data.error || 'Ошибка при создании этажа', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Ошибка при создании этажа', 'error');
+            } finally {
+                if (submitCreateFloorBtn) submitCreateFloorBtn.disabled = false;
+            }
+        };
+    }
+
+    document.getElementById('addFloorBtn').onclick = () => {
+        openCreateFloorModal();
     };
 
     // Сохранить текущий этаж на сервер в БД
@@ -1062,8 +1138,8 @@
         try {
             const payload = {
                 name: floor.name,
-                width: floor.width || 1000,
-                height: floor.height || 600,
+                width: floor.width || 1200,
+                height: floor.height || 700,
                 walls: floor.walls,
                 labels: floor.labels,
                 workplaces: floor.workplaces,
@@ -1118,9 +1194,10 @@
     }
 
     // Инициализация
+    editorSvg.classList.add('cursor-default');
     initCookieBanner();
     renderFloorTabs();
-    updateStatusAndZoomDisplay();
+    resetZoom();
     renderCanvas();
     renderInspector();
 })();

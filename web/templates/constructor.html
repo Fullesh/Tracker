@@ -12,7 +12,7 @@
     <!-- Верхняя панель -->
     <header class="editor-header">
         <div class="editor-header__left">
-            <a href="/" class="btn btn--ghost" style="text-decoration:none">
+            <a href="/" class="btn btn--ghost">
                 <svg viewBox="0 0 24 24" class="btn__icon"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
                 <span>В трекер</span>
             </a>
@@ -106,7 +106,7 @@
 
         <!-- Холст конструктора -->
         <main class="canvas-wrap" id="canvasWrap">
-            <svg id="editorSvg" class="editor-svg" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
+            <svg id="editorSvg" class="editor-svg" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid meet">
                 <!-- Фоновая сетка -->
                 <defs>
                     <pattern id="grid-pattern-small" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -117,7 +117,7 @@
                         <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#d5d1cb" stroke-width="0.8" />
                     </pattern>
                 </defs>
-                <rect width="1000" height="600" fill="url(#grid-pattern-large)" class="grid-bg" />
+                <rect width="1200" height="700" fill="url(#grid-pattern-large)" class="grid-bg" />
 
                 <!-- Группы элементов плана -->
                 <g id="wallsLayer"></g>
@@ -150,7 +150,7 @@
             </div>
 
             <div class="inspector__footer">
-                <button class="btn btn--danger-ghost" id="deleteSelectedBtn" type="button" style="display:none">
+                <button class="btn btn--danger-ghost" id="deleteSelectedBtn" type="button" hidden>
                     Удалить объект
                 </button>
             </div>
@@ -161,6 +161,29 @@
 <!-- Всплывающее уведомление (Toast) -->
 <div class="toast" id="editorToast"></div>
 
+<!-- Модальное окно создания этажа -->
+<div class="modal" id="createFloorModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <form class="modal__dialog modal__dialog--small" id="createFloorForm" autocomplete="off">
+        <div class="modal__header">
+            <h2>Новый этаж</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <label class="field">
+                <span class="field__label">Название этажа <span class="req">*</span></span>
+                <input class="input" name="floor_name" id="createFloorNameInput" required maxlength="100" placeholder="Например: 3 этаж">
+            </label>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--action" type="submit" id="submitCreateFloorBtn">Создать этаж</button>
+            </div>
+        </div>
+    </form>
+</div>
+
 <!-- Модальное окно подтверждения удаления этажа -->
 <div class="modal" id="deleteFloorModal" hidden>
     <div class="modal__overlay" data-close></div>
@@ -170,8 +193,8 @@
             <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
         </div>
         <div class="modal__body">
-            <p id="deleteFloorModalMessage" style="margin: 0; line-height: 1.5; color: var(--text-primary);"></p>
-            <p style="margin: 8px 0 0; font-size: 13px; color: var(--text-secondary);">
+            <p id="deleteFloorModalMessage" class="modal__confirm-text"></p>
+            <p class="modal__confirm-sub">
                 Это действие необратимо. Все стены, надписи и рабочие места на этом этаже будут безвозвратно удалены.
             </p>
         </div>
@@ -186,7 +209,7 @@
 
 <!-- Предупреждение о сборе Cookie -->
 <aside class="cookie-banner" id="cookieBanner" hidden aria-live="polite">
-    <div class="cookie-banner__icon" aria-hidden="true">🍪</div>
+    <div class="cookie-banner__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1zm-2 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm-3 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm7 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z"/></svg></div>
     <div class="cookie-banner__content">
         <div class="cookie-banner__title">Предупреждение о сборе cookie</div>
         <p class="cookie-banner__text">Системные администраторы отобрали Ваши cookie, но Вы можете взять ещё на кухне.</p>

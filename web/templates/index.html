@@ -8,8 +8,9 @@
 </head>
 <body>
 <div class="app">
+    <div class="sidebar-overlay" id="sidebarOverlay" hidden></div>
     <!-- Боковое меню -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="appSidebar">
         <div class="sidebar__logo">
             <span class="logo-mark" aria-hidden="true"></span>
             <span class="logo-text">Трекер</span>
@@ -50,6 +51,9 @@
     <main class="main">
         <header class="topbar">
             <div class="topbar__heading">
+                <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Открыть меню">
+                    <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
+                </button>
                 <h1 id="pageTitle">Задачи</h1>
                 <span class="counter" id="taskCounter">0</span>
             </div>
@@ -151,14 +155,14 @@
                     <span class="legend__item"><i class="legend__dot st-s2"></i>S2</span>
                     <span class="legend__item"><i class="legend__dot st-s1"></i>S1</span>
                 </div>
-                <a class="btn btn--ghost" href="/constructor" id="editFloorBtn" style="text-decoration:none">
+                <a class="btn btn--ghost" href="/constructor" id="editFloorBtn">
                     <svg viewBox="0 0 24 24" class="btn__icon"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                     <span>Редактор этажа</span>
                 </a>
             </div>
             <div class="office__layout">
                 <div class="office__canvas" id="officeCanvas">
-                    <svg id="floorSvg" class="floor" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+                    <svg id="floorSvg" class="floor" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid meet"></svg>
                     <!-- Всплывающая карточка сотрудника и его задач при наведении на рабочее место -->
                     <div class="desk-hover-card" id="deskHoverCard" hidden></div>
                 </div>
@@ -177,11 +181,8 @@
         <!-- Раздел: Мои задачи -->
         <section class="my-tasks-view" id="myTasksView" hidden>
             <div class="my-tasks-header">
-                <div>
-                    <h2 class="my-tasks-header__title">Мои задачи</h2>
-                    <p class="my-tasks-header__desc">Задачи, созданные вами, и задачи, направленные на ваше рабочее место</p>
-                </div>
-                <button class="btn btn--action" id="createMyTaskBtn" type="button">
+                <p class="my-tasks-header__desc">Задачи, созданные вами, и задачи, направленные на ваше рабочее место</p>
+                <button class="btn btn--action" id="createMyTaskBtn" type="button" hidden>
                     <span class="btn__plus">+</span> Создать задачу
                 </button>
             </div>
@@ -209,9 +210,9 @@
                     </thead>
                     <tbody id="inventoryTableBody"></tbody>
                 </table>
-            </div>
-            <div class="inventory-empty" id="inventoryEmpty" hidden>
-                <p>Оборудование по выбранным критериям не найдено</p>
+                <div class="inventory-empty" id="inventoryEmpty" hidden>
+                    <p>Оборудование по выбранным критериям не найдено</p>
+                </div>
             </div>
         </section>
     </main>
@@ -290,7 +291,7 @@
             <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
         </div>
         <div class="modal__body">
-            <div id="loginError" class="emp-modal__perm-banner emp-modal__perm-banner--info" style="color: #d42a0c; background: #ffe0db; border-color: #fc3f1d; margin-bottom: 12px;" hidden></div>
+            <div id="loginError" class="emp-modal__perm-banner emp-modal__perm-banner--error" hidden></div>
             <label class="field">
                 <span class="field__label">Логин <span class="req">*</span></span>
                 <input class="input" name="username" required autocomplete="username" placeholder="Логин (например admin)">
@@ -299,7 +300,7 @@
                 <span class="field__label">Пароль <span class="req">*</span></span>
                 <input class="input" type="password" name="password" required autocomplete="current-password" placeholder="Пароль">
             </label>
-            <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 0;">
+            <p class="modal__hint">
                 Администраторы могут редактировать любые карточки, а сотрудники — свои профили.
             </p>
         </div>
@@ -397,6 +398,29 @@
             <div class="sticker-number" id="stickerInvNumber"></div>
             <div class="sticker-name" id="stickerInvName"></div>
             <div class="sticker-place" id="stickerInvPlace"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения удаления оборудования -->
+<div class="modal" id="deleteInventoryModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--small">
+        <div class="modal__header">
+            <h2>Удаление оборудования</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <p id="deleteInventoryModalMessage" class="modal__confirm-text"></p>
+            <p class="modal__confirm-sub">
+                Это действие необратимо. Запись об оборудовании будет безвозвратно удалена из базы данных.
+            </p>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--danger" type="button" id="confirmDeleteInventoryBtn">Удалить оборудование</button>
+            </div>
         </div>
     </div>
 </div>
