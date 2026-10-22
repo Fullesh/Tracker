@@ -68,7 +68,7 @@ func (h *Handler) currentAuth(r *http.Request) map[string]any {
 			wpID = user.Employee.WorkplaceID
 			dept := strings.ToLower(user.Employee.Department)
 			pos := strings.ToLower(user.Employee.Position)
-			if strings.Contains(dept, "МТО") || strings.Contains(pos, "МТО") {
+			if strings.Contains(dept, "мто") || strings.Contains(pos, "мто") {
 				isMTO = true
 			}
 		}
@@ -131,4 +131,22 @@ func (h *Handler) currentUser(r *http.Request) *domain.User {
 		return &user
 	}
 	return nil
+}
+
+func (h *Handler) RequireMTOOrAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		auth := h.currentAuth(r)
+		isAdmin, _ := auth["is_admin"].(bool)
+		isMTO, _ := auth["is_mto"].(bool)
+		if !isAdmin && !isMTO {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   "Доступ запрещён: требуются права администратора системы или сотрудника МТО",
+			})
+			return
+		}
+		next(w, r)
+	}
 }
