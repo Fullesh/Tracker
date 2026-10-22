@@ -77,7 +77,7 @@ func (h *Handler) saveUserCredentials(empID uint, username, password string) err
 
 func (h *Handler) GetEmployees(w http.ResponseWriter, r *http.Request) {
 	var employees []domain.Employee
-	if err := h.db.Preload("Workplace").Preload("User").Order("full_name ASC").Find(&employees).Error; err != nil {
+	if err := h.db.Preload("Workplace").Preload("User").Preload("InventoryItem").Order("full_name ASC").Find(&employees).Error; err != nil {
 		http.Error(w, "Ошибка полученяи сотрудников"+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -148,7 +148,7 @@ func (h *Handler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 	emp.CanEdit = true
 
 	h.saveUserCredentials(emp.ID, r.FormValue("username"), r.FormValue("password"))
-	h.db.Preload("Workplace").Preload("User").First(&emp, employeeID)
+	h.db.Preload("Workplace").Preload("User").Preload("InventoryItem").First(&emp, employeeID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
@@ -199,7 +199,7 @@ func (h *Handler) CreateEmployee(w http.ResponseWriter, r *http.Request) {
 	emp.CanEdit = true
 
 	h.saveUserCredentials(emp.ID, r.FormValue("username"), r.FormValue("password"))
-	h.db.Preload("Workplace").Preload("User").First(&emp, emp.ID)
+	h.db.Preload("Workplace").Preload("User").Preload("InventoryItem").First(&emp, emp.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
