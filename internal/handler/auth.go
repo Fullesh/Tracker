@@ -58,12 +58,20 @@ func (h *Handler) currentAuth(r *http.Request) map[string]any {
 		}
 	}
 	var user domain.User
-	if err := h.db.Where("username = ?", cookie.Value).First(&user).Error; err == nil {
+	if err := h.db.Preload("Employee").Where("username = ?", cookie.Value).First(&user).Error; err == nil {
+		empName := ""
+		var wpID *uint
+		if user.Employee != nil {
+			empName = user.Employee.FullName
+			wpID = user.Employee.WorkplaceID
+		}
 		return map[string]any{
 			"is_authenticated": true,
 			"username":         user.Username,
 			"is_admin":         user.IsAdmin,
 			"user_id":          user.ID,
+			"employee_name":    empName,
+			"workplace_id":     wpID,
 		}
 	}
 	return map[string]any{
