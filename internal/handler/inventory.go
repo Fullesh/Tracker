@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -113,7 +114,53 @@ func (h *Handler) CreateInventoryItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateInventoryItem(w http.ResponseWriter, r *http.Request) {
-	return
+	idStr := r.PathValue("id")
+	inventoryID, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Некорректный ID оборудования", http.StatusBadRequest)
+		return
+	}
+	var payload inventoryPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Некорректный JSON в теле запроса", http.StatusBadRequest)
+		return
+	}
+	var item domain.InventoryItem
+	if err := h.db.First(&item, inventoryID).Error; err != nil {
+		http.Error(w, "Оборудование с таким ID не найдено", http.StatusNotFound)
+		return
+	}
+
+	if payload.Name != "" {
+		item.Name = payload.Name
+	}
+	if payload.Category != "" {
+		item.Category = payload.Category
+	}
+	if payload.TypeCode != "" {
+		item.TypeCode = payload.TypeCode
+	}
+	if payload.Status != "" {
+		item.Status = payload.Status
+	}
+	if payload.InventoryNumber != "" {
+		item.InventoryNumber = payload.InventoryNumber
+	}
+
+	item.WorkplaceCode = payload.WorkplaceCode
+	item.EmployeeID = payload.EmployeeID
+	item.Notes = payload.Notes
+
+	if err := h.db.Save(&item).Error; err != nil {
+		http.Error(w, "Ошибка обновления оборудования: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"item":    item,
+	})
 }
 
 func (h *Handler) DeleteInventoryItem(w http.ResponseWriter, r *http.Request) {
