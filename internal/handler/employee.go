@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 func saveUploadedPhoto(r *http.Request, empID uint) (string, error) {
@@ -36,9 +38,46 @@ func saveUploadedPhoto(r *http.Request, empID uint) (string, error) {
 	return "/static/uploads/" + fileName, nil
 }
 
+func (h *Handler) saveUserCredentials(empID uint, username, password string) error {
+	if username == "" {
+		return nil // логин не передан — ничего не делаем
+	}
+	var user domain.User
+	err := h.db.Where("employee_id = ?", empID).First(&user).Error
+	if err == nil {
+		// 1. Пользователь уже существует — обновляем логин
+		user.Username = username
+		if password != "" {
+			// Если пришёл новый пароль — обновляем хеш
+			hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			if err != nil {
+				return err
+			}
+			user.PasswordHash = string(hash)
+		}
+		return h.db.Save(&user).Error
+	}
+	// 2. Пользователя ещё нет — создаём новую учётку
+	var hash []byte
+	if password != "" {
+		var err error
+		hash, err = bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+	}
+	newUser := domain.User{
+		EmployeeID:   &empID,
+		Username:     username,
+		PasswordHash: string(hash),
+		IsAdmin:      false,
+	}
+	return h.db.Create(&newUser).Error
+}
+
 func (h *Handler) GetEmployees(w http.ResponseWriter, r *http.Request) {
 	var employees []domain.Employee
-	if err := h.db.Preload("Workplace").Order("full_name ASC").Find(&employees).Error; err != nil {
+	if err := h.db.Preload("Workplace").Preload("User").Order("full_name ASC").Find(&employees).Error; err != nil {
 		http.Error(w, "Ошибка полученяи сотрудников"+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -108,6 +147,9 @@ func (h *Handler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 	h.db.Preload("Workplace").First(&emp, employeeID)
 	emp.CanEdit = true
 
+	h.saveUserCredentials(emp.ID, r.FormValue("username"), r.FormValue("password"))
+	h.db.Preload("Workplace").Preload("User").First(&emp, employeeID)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"success":  true,
@@ -155,6 +197,9 @@ func (h *Handler) CreateEmployee(w http.ResponseWriter, r *http.Request) {
 		h.db.Preload("Workplace").First(&emp, emp.ID)
 	}
 	emp.CanEdit = true
+
+	h.saveUserCredentials(emp.ID, r.FormValue("username"), r.FormValue("password"))
+	h.db.Preload("Workplace").Preload("User").First(&emp, emp.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
