@@ -48,7 +48,7 @@ type Workplace struct {
 type Employee struct {
 	ID          uint       `gorm:"primaryKey" json:"id"`
 	FullName    string     `gorm:"size:200;not null;index" json:"full_name"`
-	Photo       string     `gorm:"size:255" json:"photo"`
+	Photo       string     `gorm:"size:255" json:"photo_url"`
 	Position    string     `gorm:"size:150" json:"position"`
 	Department  string     `gorm:"size:150;not null;index" json:"department"`
 	WorkPhone   string     `gorm:"size:50" json:"work_phone"`
