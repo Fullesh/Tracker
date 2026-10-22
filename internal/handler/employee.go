@@ -3,9 +3,38 @@ package handler
 import (
 	"PTracker/internal/domain"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"time"
 )
+
+func saveUploadedPhoto(r *http.Request, empID uint) (string, error) {
+	if err := os.MkdirAll("web/static/uploads", 0755); err != nil {
+		return "", err
+	}
+	file, header, err := r.FormFile("photo")
+	if err != nil {
+		return "", nil
+	}
+	defer file.Close()
+	extension := filepath.Ext(header.Filename)
+	fileName := fmt.Sprintf("emp_%d_%d%s", empID, time.Now().UnixNano(), extension)
+	destPath := filepath.Join("web", "static", "uploads", fileName)
+	dst, err := os.Create(destPath)
+	if err != nil {
+		return "", err
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		return "", err
+	}
+	return "/static/uploads/" + fileName, nil
+}
 
 func (h *Handler) GetEmployees(w http.ResponseWriter, r *http.Request) {
 	var employees []domain.Employee
@@ -64,6 +93,13 @@ func (h *Handler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 		emp.WorkplaceID = &id
 	}
 
+	if r.FormValue("delete_photo") == "true" {
+		emp.Photo = ""
+	}
+	if photoURL, err := saveUploadedPhoto(r, uint(emp.ID)); err == nil && photoURL != "" {
+		emp.Photo = photoURL
+	}
+
 	if err := h.db.Save(&emp).Error; err != nil {
 		http.Error(w, "Ошибка сохранения: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -109,6 +145,12 @@ func (h *Handler) CreateEmployee(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Ошибка создания сотрудника: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if photoURL, err := saveUploadedPhoto(r, uint(emp.ID)); err == nil && photoURL != "" {
+		emp.Photo = photoURL
+		h.db.Model(&emp).Update("photo", photoURL)
+	}
+
 	if emp.WorkplaceID != nil {
 		h.db.Preload("Workplace").First(&emp, emp.ID)
 	}
