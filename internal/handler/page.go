@@ -49,7 +49,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	var tasks []domain.Task
 	h.db.Order("id ASC").Find(&tasks)
 	h.db.Preload("Walls").Preload("Labels").Preload("Workplaces").Find(&floors)
-	h.db.Preload("Workplace").Preload("User").Find(&employees)
+	h.db.Preload("Workplace").Preload("User").Preload("InventoryItem").Find(&employees)
 	isAdmin, _ := auth["is_admin"].(bool)
 	for i := range employees {
 		employees[i].CanEdit = isAdmin

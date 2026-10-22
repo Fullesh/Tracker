@@ -46,20 +46,21 @@ type Workplace struct {
 }
 
 type Employee struct {
-	ID          uint       `gorm:"primaryKey" json:"id"`
-	User        *User      `gorm:"foreignKey:EmployeeID" json:"user,omitempty"`
-	FullName    string     `gorm:"size:200;not null;index" json:"full_name"`
-	Photo       string     `gorm:"size:255" json:"photo_url"`
-	Position    string     `gorm:"size:150" json:"position"`
-	Department  string     `gorm:"size:150;not null;index" json:"department"`
-	WorkPhone   string     `gorm:"size:50" json:"work_phone"`
-	Email       string     `gorm:"size:255" json:"email"`
-	WorkplaceID *uint      `gorm:"constraint:OnDelete:SET NULL;" json:"workplace_id,omitempty"`
-	Workplace   *Workplace `gorm:"foreignKey:WorkplaceID" json:"workplace,omitempty"`
-	Equipment   string     `gorm:"type:text" json:"equipment"`
-	CanEdit     bool       `gorm:"-" json:"can_edit"`
-	CreatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+	ID             uint            `gorm:"primaryKey" json:"id"`
+	User           *User           `gorm:"foreignKey:EmployeeID" json:"user,omitempty"`
+	FullName       string          `gorm:"size:200;not null;index" json:"full_name"`
+	Photo          string          `gorm:"size:255" json:"photo_url"`
+	Position       string          `gorm:"size:150" json:"position"`
+	Department     string          `gorm:"size:150;not null;index" json:"department"`
+	WorkPhone      string          `gorm:"size:50" json:"work_phone"`
+	Email          string          `gorm:"size:255" json:"email"`
+	WorkplaceID    *uint           `gorm:"constraint:OnDelete:SET NULL;" json:"workplace_id,omitempty"`
+	Workplace      *Workplace      `gorm:"foreignKey:WorkplaceID" json:"workplace,omitempty"`
+	Equipment      string          `gorm:"type:text" json:"equipment"`
+	InventoryItems []InventoryItem `gorm:"foreignKey:EmployeeID" json:"inventory_items,omitempty"`
+	CanEdit        bool            `gorm:"-" json:"can_edit"`
+	CreatedAt      time.Time       `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt      time.Time       `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
 type Task struct {
