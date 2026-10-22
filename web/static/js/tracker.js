@@ -55,6 +55,7 @@
         workplaces: CONFIG.workplaces || [],
         auth: CONFIG.auth || { is_authenticated: false, username: '', is_admin: false },
         selectedEmployee: null,
+        workday: null,
     };
 
     function loadTasks() {
@@ -300,6 +301,7 @@
 
         renderPeople();
         renderUserPill();
+        renderWorkdayWidget();
     }
 
     // ---------- Доска ----------
@@ -1654,6 +1656,11 @@
             });
         } catch (e) { /* ignore */ }
         state.auth = { is_authenticated: false, username: '', is_admin: false };
+        state.workday = null;
+        if (workdayTimerInterval) {
+            clearInterval(workdayTimerInterval);
+            workdayTimerInterval = null;
+        }
         await refreshEmployees();
         render();
     }
@@ -1688,6 +1695,7 @@
                 };
                 closeLoginModal();
                 await refreshEmployees();
+                await loadWorkdayStatus();
                 render();
             } catch (err) {
                 if (loginErrorEl) {
@@ -1861,6 +1869,241 @@
         });
     }
 
+    // ---------- Учёт рабочего времени ----------
+    const START_PHRASES = [
+        'Прекрасно выглядите! Хорошего дня!',
+        'Рады вас видеть!',
+        'Отличного настроения и легких задач!'
+    ];
+
+    const FINISH_PHRASES = [
+        'Хорошего вечера!'
+    ];
+
+    let toastTimeout = null;
+    function showToast(text, type = 'info') {
+        const toastEl = document.getElementById('trackerToast');
+        if (!toastEl) return;
+        toastEl.textContent = text;
+        toastEl.className = 'toast toast--show';
+        if (type === 'success') toastEl.classList.add('toast--success');
+        if (type === 'error') toastEl.classList.add('toast--error');
+        if (toastTimeout) clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            toastEl.classList.remove('toast--show');
+        }, 3500);
+    }
+
+    function getWorkdayElapsedMs(session) {
+        if (!session || !session.started_at) return 0;
+        const start = new Date(session.started_at).getTime();
+        const now = Date.now();
+        let pauseMs = (session.paused_duration || 0) * 1000;
+
+        if (session.status === 'paused' && session.paused_at) {
+            pauseMs += Math.max(0, now - new Date(session.paused_at).getTime());
+        }
+
+        if (session.status === 'finished' && session.finished_at) {
+            const finish = new Date(session.finished_at).getTime();
+            return Math.max(0, finish - start - pauseMs);
+        }
+
+        return Math.max(0, now - start - pauseMs);
+    }
+
+    function formatDuration(ms) {
+        const totalSec = Math.floor(Math.max(0, ms) / 1000);
+        const hrs = Math.floor(totalSec / 3600);
+        const mins = Math.floor((totalSec % 3600) / 60);
+        const secs = totalSec % 60;
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+    }
+
+    let workdayTimerInterval = null;
+    function updateTimerDisplay() {
+        const timerEl = document.getElementById('workdayTimer');
+        if (!timerEl || !state.workday) return;
+        const elapsed = getWorkdayElapsedMs(state.workday);
+        const timeStr = formatDuration(elapsed);
+        if (state.workday.status === 'paused') {
+            timerEl.textContent = `${timeStr} (пауза)`;
+        } else {
+            timerEl.textContent = timeStr;
+        }
+    }
+
+    function renderWorkdayWidget() {
+        const widgetEl = document.getElementById('workdayWidget');
+        if (!widgetEl) return;
+        widgetEl.innerHTML = '';
+
+        if (!state.auth || !state.auth.is_authenticated) {
+            if (workdayTimerInterval) {
+                clearInterval(workdayTimerInterval);
+                workdayTimerInterval = null;
+            }
+            return;
+        }
+
+        const session = state.workday;
+
+        if (!session || session.status === 'none') {
+            if (workdayTimerInterval) {
+                clearInterval(workdayTimerInterval);
+                workdayTimerInterval = null;
+            }
+            const startBtn = el('button', {
+                class: 'btn btn--action btn--small',
+                style: 'height: 32px; font-size: 13px;',
+                type: 'button',
+                text: 'Начать рабочий день',
+                onclick: async () => {
+                    startBtn.disabled = true;
+                    try {
+                        const resp = await fetch('/api/workday/start/', {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': getCsrfToken() }
+                        });
+                        const res = await resp.json();
+                        if (resp.ok && res.session) {
+                            state.workday = res.session;
+                            const phrase = START_PHRASES[Math.floor(Math.random() * START_PHRASES.length)];
+                            showToast(phrase, 'success');
+                            renderWorkdayWidget();
+                        } else {
+                            showToast(res.error || 'Не удалось начать рабочий день', 'error');
+                        }
+                    } catch (e) {
+                        showToast('Ошибка при начале рабочего дня', 'error');
+                    } finally {
+                        startBtn.disabled = false;
+                    }
+                }
+            });
+            widgetEl.append(startBtn);
+            return;
+        }
+
+        if (session.status === 'active' || session.status === 'paused') {
+            const isPaused = session.status === 'paused';
+            const elapsed = getWorkdayElapsedMs(session);
+            const timeStr = formatDuration(elapsed);
+
+            const timerEl = el('span', {
+                class: `workday-timer ${isPaused ? 'workday-timer--paused' : ''}`,
+                id: 'workdayTimer',
+                text: isPaused ? `${timeStr} (пауза)` : timeStr
+            });
+
+            if (!isPaused && !workdayTimerInterval) {
+                workdayTimerInterval = setInterval(updateTimerDisplay, 1000);
+            } else if (isPaused && workdayTimerInterval) {
+                clearInterval(workdayTimerInterval);
+                workdayTimerInterval = null;
+            }
+
+            const pauseBtn = el('button', {
+                class: 'btn btn--ghost btn--small',
+                style: 'height: 32px; font-size: 13px;',
+                type: 'button',
+                text: isPaused ? 'Продолжить работу' : 'На обед',
+                onclick: async () => {
+                    pauseBtn.disabled = true;
+                    try {
+                        const resp = await fetch('/api/workday/pause/', {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': getCsrfToken() }
+                        });
+                        const res = await resp.json();
+                        if (resp.ok && res.session) {
+                            state.workday = res.session;
+                            renderWorkdayWidget();
+                        } else {
+                            showToast(res.error || 'Ошибка изменения статуса', 'error');
+                        }
+                    } catch (e) {
+                        showToast('Ошибка при переключении паузы', 'error');
+                    } finally {
+                        pauseBtn.disabled = false;
+                    }
+                }
+            });
+
+            const finishBtn = el('button', {
+                class: 'btn btn--danger-ghost btn--small',
+                style: 'height: 32px; font-size: 13px;',
+                type: 'button',
+                text: 'Завершить день',
+                onclick: async () => {
+                    finishBtn.disabled = true;
+                    try {
+                        const resp = await fetch('/api/workday/finish/', {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': getCsrfToken() }
+                        });
+                        const res = await resp.json();
+                        if (resp.ok && res.session) {
+                            state.workday = res.session;
+                            if (workdayTimerInterval) {
+                                clearInterval(workdayTimerInterval);
+                                workdayTimerInterval = null;
+                            }
+                            const phrase = FINISH_PHRASES[Math.floor(Math.random() * FINISH_PHRASES.length)];
+                            showToast(phrase, 'success');
+                            renderWorkdayWidget();
+                        } else {
+                            showToast(res.error || 'Ошибка завершения дня', 'error');
+                        }
+                    } catch (e) {
+                        showToast('Ошибка при завершении дня', 'error');
+                    } finally {
+                        finishBtn.disabled = false;
+                    }
+                }
+            });
+
+            widgetEl.append(timerEl, pauseBtn, finishBtn);
+            return;
+        }
+
+        if (session.status === 'finished') {
+            if (workdayTimerInterval) {
+                clearInterval(workdayTimerInterval);
+                workdayTimerInterval = null;
+            }
+            const elapsed = getWorkdayElapsedMs(session);
+            const timeStr = formatDuration(elapsed);
+
+            const badge = el('span', {
+                class: 'workday-timer workday-timer--finished',
+                text: `День завершён: ${timeStr}`
+            });
+
+            widgetEl.append(badge);
+        }
+    }
+
+    async function loadWorkdayStatus() {
+        if (!state.auth || !state.auth.is_authenticated) return;
+        try {
+            const resp = await fetch('/api/workday/status/');
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data.has_session && data.session) {
+                    state.workday = data.session;
+                } else {
+                    state.workday = null;
+                }
+                renderWorkdayWidget();
+            }
+        } catch (e) {
+            console.error('Ошибка загрузки статуса рабочего дня:', e);
+        }
+    }
+
     initCookieBanner();
     render();
+    loadWorkdayStatus();
 })();

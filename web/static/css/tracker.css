@@ -1161,5 +1161,73 @@ select.input {
     }
 }
 
+/* Виджет рабочего времени */
+.workday-widget {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.workday-timer {
+    display: inline-flex;
+    align-items: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: var(--radius-s);
+    background: #eef6ff;
+    color: #0066cc;
+    letter-spacing: 0.5px;
+    height: 32px;
+    box-sizing: border-box;
+}
+
+.workday-timer--paused {
+    background: #fff8e6;
+    color: #b36b00;
+}
+
+.workday-timer--finished {
+    background: var(--bg-control);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-weight: 500;
+    font-size: 13px;
+}
+
+/* Toast уведомления */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #21201f;
+    color: #ffffff;
+    padding: 12px 20px;
+    border-radius: var(--radius-s);
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    transform: translateY(100px);
+    opacity: 0;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.toast--show {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.toast--success {
+    background: #24803c;
+}
+
+.toast--error {
+    background: #fc3f1d;
+}
+
+
 
 
