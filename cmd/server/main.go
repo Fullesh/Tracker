@@ -13,6 +13,7 @@ import (
 func main() {
 	migrateFlag := flag.Bool("migrate", false, "migrate database")
 	seedFlag := flag.Bool("seed", false, "seed database")
+	resetFlag := flag.Bool("reset", false, "reset database (drop tables, migrate, and seed)")
 	flag.Parse()
 	// Подключаемся к СУБД
 	db, err := config.InitDB()
@@ -27,6 +28,18 @@ func main() {
 	h := handler.NewHandler(db)
 	router := h.InitRoutes()
 
+	if *resetFlag {
+		log.Println("Полный сброс БД (удаление таблиц и миграция)...")
+		if err := repository.Reset(db); err != nil {
+			log.Fatalf("Ошибка сброса БД: %v", err)
+		}
+		log.Println("Таблицы пересозданы. Запуск наполнения БД...")
+		if err := seed.Seed(db); err != nil {
+			log.Fatalf("Ошибка сидирования: %v", err)
+		}
+		log.Println("Сброс и сидирование БД успешно завершены!")
+		return
+	}
 	if *migrateFlag {
 		log.Println("Запуск миграции БД")
 		if err := repository.Migrate(db); err != nil {
