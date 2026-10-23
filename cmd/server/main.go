@@ -26,9 +26,15 @@ func main() {
 	sqlDB, _ := db.DB()
 	defer sqlDB.Close()
 
-	pingerSvc := service.NewPingerService(db)
+	// Применяем актуальные миграции (добавление новых колонок)
+	if err := repository.Migrate(db); err != nil {
+		log.Printf("Предупреждение при авто-миграции БД: %v", err)
+	}
+
+	sseHub := service.NewSSEHub()
+	pingerSvc := service.NewPingerService(db, sseHub)
 	pingerSvc.Start()
-	h := handler.NewHandler(db, pingerSvc)
+	h := handler.NewHandler(db, pingerSvc, sseHub)
 	router := h.InitRoutes()
 
 	if *resetFlag {
