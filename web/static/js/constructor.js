@@ -358,6 +358,22 @@
         });
     }
 
+    function setTool(toolName) {
+        state.currentTool = toolName;
+        state.wallStart = null;
+        if (tempLayer) tempLayer.innerHTML = '';
+        document.querySelectorAll('.tool-btn[data-tool]').forEach((b) => {
+            b.classList.toggle('tool-btn--active', b.dataset.tool === toolName);
+        });
+        if (editorSvg) {
+            if (toolName === 'select') {
+                editorSvg.classList.add('cursor-default');
+            } else {
+                editorSvg.classList.remove('cursor-default');
+            }
+        }
+    }
+
     // ---------- Обработка клика по объектам ----------
     function handleItemClick(type, index, e) {
         e.stopPropagation();
@@ -368,20 +384,19 @@
             return;
         }
 
-        if (state.currentTool === 'select') {
-            let data = null;
-            if (type === 'wall') data = floor.walls[index];
-            if (type === 'label') data = floor.labels[index];
-            if (type === 'workplace') data = floor.workplaces[index];
+        let data = null;
+        if (type === 'wall') data = floor.walls[index];
+        if (type === 'label') data = floor.labels[index];
+        if (type === 'workplace') data = floor.workplaces[index];
 
-            state.selectedItem = { type, index, data };
-            renderCanvas();
-            renderInspector();
-        }
+        state.selectedItem = { type, index, data };
+        setTool('select');
+        renderCanvas();
+        renderInspector();
     }
 
     function handleItemMouseDown(type, index, e) {
-        if (state.currentTool !== 'select') return;
+        if (state.currentTool === 'delete') return;
         if (e.button !== 0) return; // только левая кнопка
         e.stopPropagation();
 
@@ -389,16 +404,22 @@
         let targetData = null;
         if (type === 'workplace') targetData = floor.workplaces[index];
         if (type === 'label') targetData = floor.labels[index];
+        if (type === 'wall') targetData = floor.walls[index];
 
         if (targetData) {
-            state.isDragging = true;
-            state.dragTarget = { type, index, data: targetData };
+            state.selectedItem = { type, index, data: targetData };
+            setTool('select');
+            renderInspector();
+
             const coords = getSvgCoordinates(e);
+            state.dragStartX = coords.rawX;
+            state.dragStartY = coords.rawY;
+            state.isDragging = false;
+            state.dragTarget = { type, index, data: targetData };
             state.dragOffset = {
                 x: coords.rawX - targetData.x,
                 y: coords.rawY - targetData.y,
             };
-            editorSvg.classList.add('cursor-grabbing');
         }
     }
 
@@ -479,16 +500,26 @@
         state.mousePos = coords;
         updateStatusAndZoomDisplay(coords);
 
-        // 2. Перетаскивание объекта
-        if (state.isDragging && state.dragTarget) {
-            const isShift = e.shiftKey;
-            const newX = snap(coords.rawX - state.dragOffset.x, state.gridSnap, isShift);
-            const newY = snap(coords.rawY - state.dragOffset.y, state.gridSnap, isShift);
-            state.dragTarget.data.x = Math.max(30, Math.min(baseW - 30, newX));
-            state.dragTarget.data.y = Math.max(30, Math.min(baseH - 30, newY));
-            renderCanvas();
-            renderInspector();
-            return;
+        // 2. Перетаскивание объекта (с порогом чувствительности >4px)
+        if (state.dragTarget) {
+            if (!state.isDragging && state.dragStartX !== undefined) {
+                const dist = Math.hypot(coords.rawX - state.dragStartX, coords.rawY - state.dragStartY);
+                if (dist > 4) {
+                    state.isDragging = true;
+                    editorSvg.classList.add('cursor-grabbing');
+                }
+            }
+
+            if (state.isDragging) {
+                const isShift = e.shiftKey;
+                const newX = snap(coords.rawX - state.dragOffset.x, state.gridSnap, isShift);
+                const newY = snap(coords.rawY - state.dragOffset.y, state.gridSnap, isShift);
+                state.dragTarget.data.x = Math.max(30, Math.min(baseW - 30, newX));
+                state.dragTarget.data.y = Math.max(30, Math.min(baseH - 30, newY));
+                renderCanvas();
+                renderInspector();
+                return;
+            }
         }
 
         // 3. Превью стены при рисовании
@@ -519,9 +550,12 @@
         }
         if (state.isDragging) {
             state.isDragging = false;
-            state.dragTarget = null;
             editorSvg.classList.remove('cursor-grabbing');
+            renderCanvas();
         }
+        state.dragTarget = null;
+        state.dragStartX = undefined;
+        state.dragStartY = undefined;
     });
 
     editorSvg.addEventListener('click', (e) => {
@@ -575,24 +609,29 @@
             const code = `${floor.order}-${count < 10 ? '0' + count : count}`;
             const defaultLabel = state.currentTool === 'server' ? `Стойка R${count}` : (state.currentTool === 'printer' ? 'МФУ' : '');
 
+            const placedKind = state.currentTool;
             const newWp = {
                 code,
-                kind: state.currentTool,
+                kind: placedKind,
                 employee: '',
                 label: defaultLabel,
                 room: '',
+                ip: '',
                 x: coords.x,
                 y: coords.y,
             };
             floor.workplaces.push(newWp);
             state.selectedItem = { type: 'workplace', index: floor.workplaces.length - 1, data: newWp };
+            setTool('select');
             renderCanvas();
             renderInspector();
-            if (state.currentTool === 'pc') {
+
+            if (placedKind === 'printer') {
+                const ipInput = document.getElementById('propIp');
+                if (ipInput) setTimeout(() => ipInput.focus(), 80);
+            } else if (placedKind === 'pc') {
                 const empInput = document.getElementById('propEmployee');
-                if (empInput) {
-                    setTimeout(() => empInput.focus(), 60);
-                }
+                if (empInput) setTimeout(() => empInput.focus(), 80);
             }
             return;
         }
@@ -1010,17 +1049,7 @@
     // ---------- Панель инструментов ----------
     document.querySelectorAll('.tool-btn[data-tool]').forEach((btn) => {
         btn.onclick = () => {
-            document.querySelectorAll('.tool-btn').forEach((b) => b.classList.remove('tool-btn--active'));
-            btn.classList.add('tool-btn--active');
-            state.currentTool = btn.dataset.tool;
-            state.wallStart = null;
-            tempLayer.innerHTML = '';
-
-            if (state.currentTool === 'select') {
-                editorSvg.classList.add('cursor-default');
-            } else {
-                editorSvg.classList.remove('cursor-default');
-            }
+            setTool(btn.dataset.tool);
         };
     });
 
