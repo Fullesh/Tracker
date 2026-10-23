@@ -44,16 +44,23 @@ func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	auth := h.currentAuth(r)
+	isAuth, _ := auth["is_authenticated"].(bool)
+
 	var floors []domain.Floor
 	var employees []domain.Employee
 	var tasks []domain.Task
-	h.db.Order("id ASC").Find(&tasks)
-	h.db.Preload("Walls").Preload("Labels").Preload("Workplaces").Find(&floors)
-	h.db.Preload("Workplace").Preload("User").Preload("InventoryItems").Find(&employees)
-	isAdmin, _ := auth["is_admin"].(bool)
-	for i := range employees {
-		employees[i].CanEdit = isAdmin
+
+	// Если пользователь не авторизован — не отдаем конфиденциальные данные компании
+	if isAuth {
+		h.db.Order("id ASC").Find(&tasks)
+		h.db.Preload("Walls").Preload("Labels").Preload("Workplaces").Find(&floors)
+		h.db.Preload("Workplace").Preload("User").Preload("InventoryItems").Find(&employees)
+		isAdmin, _ := auth["is_admin"].(bool)
+		for i := range employees {
+			employees[i].CanEdit = isAdmin
+		}
 	}
+
 	configData := map[string]any{
 		"floors":      floors,
 		"employees":   employees,

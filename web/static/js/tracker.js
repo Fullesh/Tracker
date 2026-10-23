@@ -1201,14 +1201,23 @@
 
             const mBlock = el('div', { class: 'rack-block' }, [
                 el('div', { class: 'rack-block__head' }, [
-                    el('h4', { class: 'rack-block__title', text: 'Экран переговорной' }),
-                    el('a', {
-                        class: 'btn btn--ghost btn--icon-sm',
-                        href: `/tablet/rooms/${encodeURIComponent(meetingCode)}/`,
-                        target: '_blank',
-                        text: 'Открыть экран ↗',
-                        title: 'Открыть настенный планшет переговорной в новой вкладке'
-                    })
+                    el('h4', { class: 'rack-block__title', text: 'Экраны переговорной' }),
+                    el('div', { style: 'display:flex; gap:6px;' }, [
+                        el('a', {
+                            class: 'btn btn--ghost btn--icon-sm',
+                            href: `/tablet/rooms/${encodeURIComponent(meetingCode)}/?location=inside`,
+                            target: '_blank',
+                            text: 'Внутри ↗',
+                            title: 'Открыть планшет внутри переговорной (с возможностью продления)'
+                        }),
+                        el('a', {
+                            class: 'btn btn--ghost btn--icon-sm',
+                            href: `/tablet/rooms/${encodeURIComponent(meetingCode)}/?location=outside`,
+                            target: '_blank',
+                            text: 'Снаружи ↗',
+                            title: 'Открыть внешний экран переговорной'
+                        })
+                    ])
                 ]),
                 el('div', { class: 'rack-block__list', id: 'meetingRoomScheduleBox' }, [
                     el('div', { class: 'rack-item', style: 'padding: 10px 14px; font-size: 13px; color: var(--text-muted);' }, [
@@ -2194,10 +2203,25 @@
         }
     }
 
-    function openLoginModal() {
+    function openLoginModal(isGate = false) {
         if (!loginModalEl || !loginFormEl) return;
         loginFormEl.reset();
         if (loginErrorEl) loginErrorEl.hidden = true;
+
+        const closeBtn = document.getElementById('loginModalCloseBtn');
+        const cancelBtn = document.getElementById('loginModalCancelBtn');
+        const subtitle = document.getElementById('loginModalSubtitle');
+
+        if (isGate || !state.auth.is_authenticated) {
+            if (closeBtn) closeBtn.hidden = true;
+            if (cancelBtn) cancelBtn.hidden = true;
+            if (subtitle) subtitle.hidden = false;
+        } else {
+            if (closeBtn) closeBtn.hidden = false;
+            if (cancelBtn) cancelBtn.hidden = false;
+            if (subtitle) subtitle.hidden = true;
+        }
+
         loginModalEl.hidden = false;
         setTimeout(() => {
             const uInput = loginFormEl.querySelector('input[name="username"]');
@@ -2206,6 +2230,7 @@
     }
 
     function closeLoginModal() {
+        if (!state.auth.is_authenticated) return; // Запрещаем закрывать окно входа без авторизации
         if (loginModalEl) loginModalEl.hidden = true;
     }
 
@@ -2216,14 +2241,7 @@
                 headers: { 'X-CSRFToken': getCsrfToken() },
             });
         } catch (e) { /* ignore */ }
-        state.auth = { is_authenticated: false, username: '', is_admin: false };
-        state.workday = null;
-        if (workdayTimerInterval) {
-            clearInterval(workdayTimerInterval);
-            workdayTimerInterval = null;
-        }
-        await refreshEmployees();
-        render();
+        window.location.reload();
     }
 
     if (loginFormEl) {
@@ -2249,16 +2267,7 @@
                 if (!resp.ok || !res.success) {
                     throw new Error(res.error || 'Неверный логин или пароль');
                 }
-                state.auth = {
-                    is_authenticated: true,
-                    username: res.user.username,
-                    is_admin: res.user.is_admin,
-                    is_mto: Boolean(res.user.is_mto || res.user.is_admin),
-                };
-                closeLoginModal();
-                await refreshEmployees();
-                await loadWorkdayStatus();
-                render();
+                window.location.reload();
             } catch (err) {
                 if (loginErrorEl) {
                     loginErrorEl.textContent = err.message;
@@ -2948,9 +2957,16 @@
     initInvEmployeeAutocomplete();
 
     async function loadInventory() {
+        const canAccessMTO = !!(state.auth.is_admin || state.auth.is_mto);
+        if (!canAccessMTO) {
+            return; // Обычным пользователям не нужен и недоступен инвентарь — не делаем запрос и не выводим ошибок
+        }
         try {
             const resp = await fetch('/api/inventory/');
             if (!resp.ok) {
+                if (resp.status === 401 || resp.status === 403) {
+                    return; // Тихий возврат без вывода ошибок
+                }
                 const errText = await resp.text();
                 console.error('Ошибка /api/inventory/:', resp.status, errText);
                 showToast(`Ошибка загрузки инвентаря (${resp.status}): ${errText}`, 'error');
@@ -2962,7 +2978,6 @@
             render();
         } catch (err) {
             console.error('Ошибка загрузки инвентаря:', err);
-            showToast('Ошибка сети при загрузке инвентаря: ' + (err.message || ''), 'error');
         }
     }
 
@@ -3834,6 +3849,11 @@
     }
 
     async function loadPingerStatus() {
+        if (!state.auth || !state.auth.can_pinger) {
+            const pingerBtn = document.getElementById('pingerStatusBtn');
+            if (pingerBtn) pingerBtn.hidden = true;
+            return;
+        }
         try {
             const resp = await fetch('/api/pinger/status/');
             if (!resp.ok) return;
@@ -3914,6 +3934,10 @@
 
         if (pingerStatusBtn) {
             pingerStatusBtn.addEventListener('click', async () => {
+                if (!state.auth.can_pinger) {
+                    showToast('Сетевой мониторинг доступен только системным администраторам', 'error');
+                    return;
+                }
                 await loadPingerStatus();
                 if (pingerEnabledToggle) pingerEnabledToggle.checked = Boolean(pingerData.enabled);
                 if (pingerIntervalInput) pingerIntervalInput.value = pingerData.interval_minutes || 10;
@@ -4828,20 +4852,29 @@
                 el('div', { class: 'room-card__live-sub', text: 'Синхронизация с экраном...' })
             ]);
 
-            const actions = el('div', { class: 'room-card__actions' }, [
+            const actions = el('div', { class: 'room-card__actions', style: 'display:flex; flex-wrap:wrap; gap:8px;' }, [
                 el('button', {
                     type: 'button',
                     class: 'btn btn--action',
-                    style: 'flex: 1;',
+                    style: 'flex: 1 1 100%;',
                     onclick: () => openRoomBookingModal(roomCode),
                     text: '+ Забронировать'
                 }),
                 el('a', {
                     class: 'btn btn--ghost',
-                    href: `/tablet/rooms/${encodeURIComponent(roomCode)}/`,
+                    style: 'flex: 1;',
+                    href: `/tablet/rooms/${encodeURIComponent(roomCode)}/?location=inside`,
                     target: '_blank',
-                    title: 'Открыть настенный экран переговорной в новой вкладке',
-                    text: 'Экран планшета ↗'
+                    title: 'Открыть планшет внутри переговорной (с возможностью продления)',
+                    text: 'Планшет внутри ↗'
+                }),
+                el('a', {
+                    class: 'btn btn--ghost',
+                    style: 'flex: 1;',
+                    href: `/tablet/rooms/${encodeURIComponent(roomCode)}/?location=outside`,
+                    target: '_blank',
+                    title: 'Открыть внешний экран переговорной (у входа)',
+                    text: 'Экран снаружи ↗'
                 })
             ]);
 
@@ -5071,9 +5104,17 @@
     initImageViewerModal();
     initRoomBooking();
     initTaskEvents();
-    loadPingerStatus();
-    setInterval(loadPingerStatus, 60000);
-    loadInventory();
+    if (state.auth && state.auth.can_pinger) {
+        loadPingerStatus();
+        setInterval(loadPingerStatus, 60000);
+    }
+    if (state.auth && (state.auth.is_admin || state.auth.is_mto)) {
+        loadInventory();
+    }
     render();
-    loadWorkdayStatus();
+    if (state.auth && state.auth.is_authenticated) {
+        loadWorkdayStatus();
+    } else {
+        openLoginModal(true);
+    }
 })();

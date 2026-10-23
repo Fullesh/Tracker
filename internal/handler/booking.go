@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -28,11 +29,15 @@ type quickBookPayload struct {
 
 type finishEarlyPayload struct {
 	RoomCode string `json:"room_code"`
+	Location string `json:"location"`
+	Source   string `json:"source"`
 }
 
 type extendMeetingPayload struct {
 	RoomCode        string `json:"room_code"`
 	DurationMinutes int    `json:"duration_minutes"`
+	Location        string `json:"location"`
+	Source          string `json:"source"`
 }
 
 func (h *Handler) GetRoomBookings(w http.ResponseWriter, r *http.Request) {
@@ -288,6 +293,12 @@ func (h *Handler) FinishMeetingEarly(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loc := strings.ToLower(strings.TrimSpace(payload.Location))
+	if loc == "outside" {
+		http.Error(w, "Завершение текущей встречи доступно только с планшета внутри переговорной", http.StatusForbidden)
+		return
+	}
+
 	now := time.Now()
 	var current domain.RoomBooking
 	err := h.db.Where("room_code = ? AND start_time <= ? AND end_time > ?", payload.RoomCode, now, now).
@@ -322,6 +333,16 @@ func (h *Handler) TabletPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loc := strings.ToLower(r.URL.Query().Get("location"))
+	if loc == "" {
+		loc = strings.ToLower(r.URL.Query().Get("mode"))
+	}
+	isInside := (loc == "inside")
+	locationMode := "outside"
+	if isInside {
+		locationMode = "inside"
+	}
+
 	roomName := code
 	var wp domain.Workplace
 	if err := h.db.Where("code = ?", code).First(&wp).Error; err == nil && wp.Room != "" {
@@ -337,6 +358,8 @@ func (h *Handler) TabletPage(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
 		"RoomCode": code,
 		"RoomName": roomName,
+		"IsInside": isInside,
+		"Location": locationMode,
 	}
 
 	tmpl.Execute(w, data)
@@ -351,6 +374,19 @@ func (h *Handler) ExtendMeeting(w http.ResponseWriter, r *http.Request) {
 
 	if payload.RoomCode == "" {
 		http.Error(w, "Не указан код переговорной", http.StatusBadRequest)
+		return
+	}
+
+	loc := strings.ToLower(payload.Location)
+	if loc == "" {
+		loc = strings.ToLower(payload.Source)
+	}
+	if loc == "" {
+		loc = strings.ToLower(r.Header.Get("X-Tablet-Location"))
+	}
+	// Планшет снаружи переговорной не имеет права продлевать встречу
+	if loc == "outside" || loc == "снаружи" {
+		http.Error(w, "Продление встречи доступно только с планшета внутри переговорной", http.StatusForbidden)
 		return
 	}
 

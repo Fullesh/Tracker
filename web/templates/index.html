@@ -347,14 +347,17 @@
 
 <!-- Модальное окно авторизации -->
 <div class="modal" id="loginModal" hidden>
-    <div class="modal__overlay" data-close></div>
+    <div class="modal__overlay" id="loginModalOverlay" data-close></div>
     <form class="modal__dialog modal__dialog--small" id="loginForm" autocomplete="off">
         <div class="modal__header">
-            <h2>Вход в систему</h2>
-            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+            <h2 id="loginModalTitle">Вход в систему</h2>
+            <button class="icon-btn" type="button" id="loginModalCloseBtn" data-close aria-label="Закрыть">&times;</button>
         </div>
         <div class="modal__body">
             <div id="loginError" class="emp-modal__perm-banner emp-modal__perm-banner--error" hidden></div>
+            <p id="loginModalSubtitle" class="modal__hint" style="margin-top: 0; margin-bottom: 12px; color: var(--text-secondary);" hidden>
+                Для доступа к трекеру, карте офиса и задачам требуется войти под своей учетной записью.
+            </p>
             <label class="field">
                 <span class="field__label">Логин <span class="req">*</span></span>
                 <input class="input" name="username" required autocomplete="username" placeholder="Логин (например admin)">
@@ -364,12 +367,12 @@
                 <input class="input" type="password" name="password" required autocomplete="current-password" placeholder="Пароль">
             </label>
             <p class="modal__hint">
-                Администраторы могут редактировать любые карточки, а сотрудники — свои профили.
+                Сотрудники используют корпоративный логин и пароль по умолчанию (Welcome123!).
             </p>
         </div>
         <div class="modal__footer">
-            <button class="btn btn--ghost" type="button" data-close>Отмена</button>
-            <button class="btn btn--action" type="submit">Войти</button>
+            <button class="btn btn--ghost" type="button" id="loginModalCancelBtn" data-close>Отмена</button>
+            <button class="btn btn--action" type="submit" style="flex: 1;">Войти в систему</button>
         </div>
     </form>
 </div>

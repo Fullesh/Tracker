@@ -63,6 +63,7 @@ func (h *Handler) currentAuth(r *http.Request) map[string]any {
 		empName := ""
 		var wpID *uint
 		isMTO := false
+		isSysAdmin := false
 		if user.Employee != nil {
 			empName = user.Employee.FullName
 			wpID = user.Employee.WorkplaceID
@@ -71,12 +72,18 @@ func (h *Handler) currentAuth(r *http.Request) map[string]any {
 			if strings.Contains(dept, "мто") || strings.Contains(pos, "мто") {
 				isMTO = true
 			}
+			if strings.Contains(pos, "системный администратор") || strings.Contains(pos, "sysadmin") || strings.Contains(pos, "сисадмин") || strings.Contains(pos, "devops") || strings.Contains(dept, "it") || strings.Contains(dept, "инфраструктура") {
+				isSysAdmin = true
+			}
 		}
+		canPinger := user.IsAdmin || isSysAdmin
 		return map[string]any{
 			"is_authenticated": true,
 			"username":         user.Username,
 			"is_admin":         user.IsAdmin,
 			"is_mto":           isMTO || user.IsAdmin,
+			"is_sysadmin":      isSysAdmin,
+			"can_pinger":       canPinger,
 			"user_id":          user.ID,
 			"employee_name":    empName,
 			"workplace_id":     wpID,
@@ -86,6 +93,9 @@ func (h *Handler) currentAuth(r *http.Request) map[string]any {
 		"is_authenticated": false,
 		"username":         "",
 		"is_admin":         false,
+		"is_mto":           false,
+		"is_sysadmin":      false,
+		"can_pinger":       false,
 	}
 }
 
@@ -131,6 +141,54 @@ func (h *Handler) currentUser(r *http.Request) *domain.User {
 		return &user
 	}
 	return nil
+}
+
+func (h *Handler) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		auth := h.currentAuth(r)
+		isAuth, _ := auth["is_authenticated"].(bool)
+		if !isAuth {
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   "Требуется авторизация в системе",
+				})
+				return
+			}
+			http.Redirect(w, r, "/?login=1", http.StatusSeeOther)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (h *Handler) RequirePinger(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		auth := h.currentAuth(r)
+		isAuth, _ := auth["is_authenticated"].(bool)
+		if !isAuth {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   "Требуется авторизация в системе",
+			})
+			return
+		}
+		canPinger, _ := auth["can_pinger"].(bool)
+		if !canPinger {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   "Доступ к сетевому мониторингу разрешен только системным администраторам и администраторам системы",
+			})
+			return
+		}
+		next(w, r)
+	}
 }
 
 func (h *Handler) RequireMTOOrAdmin(next http.HandlerFunc) http.HandlerFunc {
