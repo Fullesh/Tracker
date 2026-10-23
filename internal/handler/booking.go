@@ -4,6 +4,7 @@ import (
 	"PTracker/internal/domain"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -109,5 +110,37 @@ func (h *Handler) CreateRoomBooking(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"booking": booking,
+	})
+}
+
+func (h *Handler) DeleteRoomBooking(w http.ResponseWriter, r *http.Request) {
+	var booking domain.RoomBooking
+	idStr := r.PathValue("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id < 0 {
+		http.Error(w, "Некорректный ID бронирования", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.db.First(&booking, id).Error; err != nil {
+		http.Error(w, "Бронирование не найдено", http.StatusNotFound)
+		return
+	}
+
+	if err := h.db.Delete(&booking).Error; err != nil {
+		http.Error(w, "Ошибка удаления: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if h.sse != nil {
+		h.sse.Broadcast("booking_cancelled", map[string]any{
+			"id":        id,
+			"room_code": booking.RoomCode,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
 	})
 }
