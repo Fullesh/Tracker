@@ -94,6 +94,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
     overflow-y: auto;
 }
 
+.sidebar__footer {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    flex-shrink: 0;
+}
+
 .sidebar__title {
     padding: 0 12px 8px;
     font-size: 12px;

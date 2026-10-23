@@ -2,6 +2,15 @@
     'use strict';
 
     const CONFIG = JSON.parse(document.getElementById('tracker-config').textContent);
+    CONFIG.floors = Array.isArray(CONFIG.floors) ? CONFIG.floors : [];
+    CONFIG.employees = Array.isArray(CONFIG.employees) ? CONFIG.employees : [];
+    CONFIG.tasks = Array.isArray(CONFIG.tasks) ? CONFIG.tasks : [];
+    CONFIG.assignees = Array.isArray(CONFIG.assignees) ? CONFIG.assignees : [];
+    CONFIG.statuses = Array.isArray(CONFIG.statuses) ? CONFIG.statuses : [];
+    CONFIG.priorities = Array.isArray(CONFIG.priorities) ? CONFIG.priorities : [];
+    CONFIG.severities = Array.isArray(CONFIG.severities) ? CONFIG.severities : [];
+    CONFIG.departments = Array.isArray(CONFIG.departments) ? CONFIG.departments : [];
+    CONFIG.auth = (CONFIG.auth && typeof CONFIG.auth === 'object') ? CONFIG.auth : { is_authenticated: false, username: '', is_admin: false };
     const STORAGE_KEY = 'ptracker.tasks.v4';
     const KEY_PREFIX = 'PT';
     const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -2194,12 +2203,51 @@
         } else {
             const loginBtn = el('button', {
                 class: 'btn btn--ghost',
-                style: 'padding: 4px 12px; font-size: 13px; height: 34px;',
+                style: 'padding: 6px 14px; font-size: 13px; height: 34px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;',
                 type: 'button',
-                text: 'Войти',
-                onclick: openLoginModal
+                html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 17l5-5-5-5v3H3v4h7v3zm9-14H5c-1.1 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg> Войти',
+                onclick: () => openLoginModal(false)
             });
             userPillEl.append(loginBtn);
+        }
+
+        const sidebarFooterEl = document.getElementById('sidebarFooter');
+        if (sidebarFooterEl) {
+            sidebarFooterEl.innerHTML = '';
+            if (state.auth.is_authenticated) {
+                const username = state.auth.username || 'Пользователь';
+                const isAdmin = state.auth.is_admin;
+                const initial = username.charAt(0).toUpperCase();
+
+                const profileWrap = el('div', {
+                    style: 'display: flex; align-items: center; justify-content: space-between; gap: 8px;'
+                }, [
+                    el('div', { style: 'display: flex; align-items: center; gap: 10px; overflow: hidden;' }, [
+                        el('span', { class: 'user-pill__avatar', text: initial }),
+                        el('div', { style: 'display: flex; flex-direction: column; overflow: hidden;' }, [
+                            el('span', { style: 'font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;', text: username }),
+                            el('span', { style: 'font-size: 11px; color: var(--text-secondary);', text: isAdmin ? 'Администратор' : 'Сотрудник' })
+                        ])
+                    ]),
+                    el('button', {
+                        class: 'btn btn--ghost',
+                        style: 'padding: 4px 8px; font-size: 12px; height: 28px;',
+                        type: 'button',
+                        text: 'Выйти',
+                        onclick: handleLogout
+                    })
+                ]);
+                sidebarFooterEl.append(profileWrap);
+            } else {
+                const sidebarLoginBtn = el('button', {
+                    class: 'btn btn--action',
+                    style: 'width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600;',
+                    type: 'button',
+                    html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 17l5-5-5-5v3H3v4h7v3zm9-14H5c-1.1 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg> Войти в систему',
+                    onclick: () => openLoginModal(false)
+                });
+                sidebarFooterEl.append(sidebarLoginBtn);
+            }
         }
     }
 
@@ -2212,7 +2260,7 @@
         const cancelBtn = document.getElementById('loginModalCancelBtn');
         const subtitle = document.getElementById('loginModalSubtitle');
 
-        if (isGate || !state.auth.is_authenticated) {
+        if (isGate) {
             if (closeBtn) closeBtn.hidden = true;
             if (cancelBtn) cancelBtn.hidden = true;
             if (subtitle) subtitle.hidden = false;
@@ -2241,7 +2289,7 @@
                 headers: { 'X-CSRFToken': getCsrfToken() },
             });
         } catch (e) { /* ignore */ }
-        window.location.reload();
+        window.location.href = '/login';
     }
 
     if (loginFormEl) {
@@ -5115,6 +5163,6 @@
     if (state.auth && state.auth.is_authenticated) {
         loadWorkdayStatus();
     } else {
-        openLoginModal(true);
+        window.location.href = '/login';
     }
 })();

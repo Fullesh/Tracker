@@ -33,6 +33,8 @@ func (h *Handler) InitRoutes() http.Handler {
 	mux.HandleFunc("/ping", h.Ping)
 
 	// HTML-страницы
+	mux.HandleFunc("GET /login/{$}", h.LoginPage)
+	mux.HandleFunc("GET /login", h.LoginPage)
 	mux.HandleFunc("/", h.Index)
 	mux.HandleFunc("/constructor/", h.RequireAuth(h.Constructor))
 

@@ -157,7 +157,7 @@ func (h *Handler) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 				})
 				return
 			}
-			http.Redirect(w, r, "/?login=1", http.StatusSeeOther)
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 		next(w, r)

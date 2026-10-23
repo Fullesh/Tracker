@@ -42,23 +42,40 @@ func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "pong")
 }
 
+func (h *Handler) LoginPage(w http.ResponseWriter, r *http.Request) {
+	auth := h.currentAuth(r)
+	if isAuth, _ := auth["is_authenticated"].(bool); isAuth {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	tmpl, err := template.ParseFiles("web/templates/login.html")
+	if err != nil {
+		http.Error(w, "Ошибка загрузки шаблона: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tmpl.Execute(w, nil)
+}
+
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	auth := h.currentAuth(r)
 	isAuth, _ := auth["is_authenticated"].(bool)
+	if !isAuth {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
 
 	var floors []domain.Floor
 	var employees []domain.Employee
 	var tasks []domain.Task
 
-	// Если пользователь не авторизован — не отдаем конфиденциальные данные компании
-	if isAuth {
-		h.db.Order("id ASC").Find(&tasks)
-		h.db.Preload("Walls").Preload("Labels").Preload("Workplaces").Find(&floors)
-		h.db.Preload("Workplace").Preload("User").Preload("InventoryItems").Find(&employees)
-		isAdmin, _ := auth["is_admin"].(bool)
-		for i := range employees {
-			employees[i].CanEdit = isAdmin
-		}
+	h.db.Order("id ASC").Find(&tasks)
+	h.db.Preload("Walls").Preload("Labels").Preload("Workplaces").Find(&floors)
+	h.db.Preload("Workplace").Preload("User").Preload("InventoryItems").Find(&employees)
+	isAdmin, _ := auth["is_admin"].(bool)
+	for i := range employees {
+		employees[i].CanEdit = isAdmin
 	}
 
 	configData := map[string]any{
