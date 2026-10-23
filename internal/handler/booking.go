@@ -3,6 +3,7 @@ package handler
 import (
 	"PTracker/internal/domain"
 	"encoding/json"
+	"html/template"
 	"net/http"
 	"strconv"
 	"time"
@@ -306,4 +307,31 @@ func (h *Handler) FinishMeetingEarly(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 	})
+}
+
+func (h *Handler) TabletPage(w http.ResponseWriter, r *http.Request) {
+	code := r.PathValue("code")
+	if code == "" {
+		http.Error(w, "Не указан код переговорной", http.StatusBadRequest)
+		return
+	}
+
+	roomName := code
+	var wp domain.Workplace
+	if err := h.db.Where("code = ?", code).First(&wp).Error; err == nil && wp.Room != "" {
+		roomName = wp.Room
+	}
+
+	tmpl, err := template.ParseFiles("web/templates/tablet.html")
+	if err != nil {
+		http.Error(w, "Ошибка загрузки шаблона: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	data := map[string]any{
+		"RoomCode": code,
+		"RoomName": roomName,
+	}
+
+	tmpl.Execute(w, data)
 }
