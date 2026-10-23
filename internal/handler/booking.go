@@ -3,6 +3,7 @@ package handler
 import (
 	"PTracker/internal/domain"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -339,4 +340,78 @@ func (h *Handler) TabletPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tmpl.Execute(w, data)
+}
+
+func (h *Handler) ExtendMeeting(w http.ResponseWriter, r *http.Request) {
+	var payload extendMeetingPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Некорректный JSON", http.StatusBadRequest)
+		return
+	}
+
+	if payload.RoomCode == "" {
+		http.Error(w, "Не указан код переговорной", http.StatusBadRequest)
+		return
+	}
+
+	if payload.DurationMinutes <= 0 {
+		payload.DurationMinutes = 15
+	}
+
+	now := time.Now()
+	var current domain.RoomBooking
+	err := h.db.Where("room_code = ? AND start_time <= ? AND end_time > ?", payload.RoomCode, now, now).
+		First(&current).Error
+	if err != nil {
+		http.Error(w, "Активная встреча в этой переговорной не найдена", http.StatusNotFound)
+		return
+	}
+
+	requestedEnd := current.EndTime.Add(time.Duration(payload.DurationMinutes) * time.Minute)
+
+	var nextMeeting domain.RoomBooking
+	hasNextMeeting := false
+
+	if err := h.db.Where("room_code = ? AND id != ? AND start_time >= ?", payload.RoomCode, current.ID, current.EndTime).
+		Order("start_time ASC").
+		First(&nextMeeting).Error; err == nil {
+		hasNextMeeting = true
+	}
+
+	actualEnd := requestedEnd
+	partiallyExtended := false
+
+	var message string
+	if hasNextMeeting && nextMeeting.StartTime.Before(requestedEnd) {
+		availableDuration := nextMeeting.StartTime.Sub(current.EndTime)
+		availableMinutes := int(availableDuration.Minutes())
+		if availableMinutes <= 0 {
+			http.Error(w, fmt.Sprintf("Невозможно продлить: встык начинается следующая встреча «%s»", nextMeeting.Title), http.StatusConflict)
+			return
+		}
+		// Продлеваем до начала следующей встречи
+		actualEnd = nextMeeting.StartTime
+		partiallyExtended = true
+		message = fmt.Sprintf("Встреча продлена на %d мин (до начала следующей брони)", availableMinutes)
+	} else {
+		message = fmt.Sprintf("Встреча успешно продлена на %d мин", payload.DurationMinutes)
+	}
+
+	current.EndTime = actualEnd
+	if err := h.db.Save(&current).Error; err != nil {
+		http.Error(w, "Ошибка продления встречи: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if h.sse != nil {
+		h.sse.Broadcast("meeting_extended", current)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":            true,
+		"booking":            current,
+		"partially_extended": partiallyExtended,
+		"message":            message,
+	})
 }
