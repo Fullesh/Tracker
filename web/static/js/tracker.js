@@ -1488,14 +1488,10 @@
 
             let equipmentValEl;
             if (empInv.length > 0) {
+                const canManageInv = Boolean(editable || (state.auth && (state.auth.is_admin || state.auth.is_mto)));
                 equipmentValEl = el('div', { class: 'emp-inventory-list' }, empInv.map((it) => {
                     const st = INV_STATUS_MAP[it.status] || { name: it.status || 'В работе', cls: 'inv-status--assigned' };
-                    return el('div', { class: 'emp-inventory-item' }, [
-                        el('div', { class: 'emp-inventory-item__info' }, [
-                            el('span', { class: 'inventory-num', text: it.inventory_number || '' }),
-                            el('span', { class: 'inventory-name', text: it.name || '' }),
-                            el('span', { class: `inv-status-badge ${st.cls}`, text: st.name }),
-                        ]),
+                    const actionBtns = [
                         el('button', {
                             class: 'btn btn--ghost btn--icon-sm',
                             type: 'button',
@@ -1506,6 +1502,33 @@
                                 printInventorySticker(it);
                             }
                         })
+                    ];
+                    if (canManageInv && it.status !== 'decommissioned') {
+                        actionBtns.push(el('button', {
+                            class: 'btn btn--danger-ghost btn--icon-sm',
+                            type: 'button',
+                            text: 'Списать',
+                            title: 'Перевести оборудование в статус «Списано»',
+                            onclick: (e) => {
+                                e.stopPropagation();
+                                openDecommissionInventoryModal(it, emp);
+                            }
+                        }));
+                    }
+                    return el('div', {
+                        class: 'emp-inventory-item emp-inventory-item--clickable',
+                        title: 'Нажмите для редактирования оборудования',
+                        onclick: () => {
+                            closeEmployeeModal();
+                            openInventoryModal(it);
+                        }
+                    }, [
+                        el('div', { class: 'emp-inventory-item__info' }, [
+                            el('span', { class: 'inventory-num', text: it.inventory_number || '' }),
+                            el('span', { class: 'inventory-name', text: it.name || '' }),
+                            el('span', { class: `inv-status-badge ${st.cls}`, text: st.name }),
+                        ]),
+                        el('div', { class: 'emp-inventory-item__actions' }, actionBtns)
                     ]);
                 }));
             } else if (emp.equipment) {
@@ -2446,14 +2469,18 @@
     }
 
     const inventoryModalEl = document.getElementById('inventoryModal');
+    const inventoryViewDialogEl = document.getElementById('inventoryViewDialog');
     const inventoryFormEl = document.getElementById('inventoryForm');
     const invModalTitleEl = document.getElementById('invModalTitle');
     const invCategorySelectEl = document.getElementById('invCategorySelect');
     const invTypeCodeInputEl = document.getElementById('invTypeCodeInput');
     const invStatusSelectEl = document.getElementById('invStatusSelect');
     const invWorkplaceInputEl = document.getElementById('invWorkplaceInput');
-    const invWorkplaceListEl = document.getElementById('invWorkplaceList');
+    const invWorkplaceAutoDisplayEl = document.getElementById('invWorkplaceAutoDisplay');
     const invEmployeeSelectEl = document.getElementById('invEmployeeSelect');
+    const invEmployeeSearchInputEl = document.getElementById('invEmployeeSearchInput');
+    const invEmployeeClearBtnEl = document.getElementById('invEmployeeClearBtn');
+    const invEmpAutocompleteListEl = document.getElementById('invEmpAutocompleteList');
     const invNumberInputEl = document.getElementById('invNumberInput');
     const invDeleteBtnEl = document.getElementById('invDeleteBtn');
     const invPrintStickerBtnEl = document.getElementById('invPrintStickerBtn');
@@ -2473,8 +2500,16 @@
         'Ноутбук': 'NB',
         'Оргтехника': 'PR',
         'Сетевое оборудование': 'NW',
-        'Мебель': 'CH',
         'Другое': 'EQ'
+    };
+
+    const TYPE_TO_CATEGORY = {
+        'MO': 'Монитор',
+        'PC': 'Компьютер',
+        'NB': 'Ноутбук',
+        'PR': 'Оргтехника',
+        'NW': 'Сетевое оборудование',
+        'EQ': 'Другое'
     };
 
     const INV_STATUS_MAP = {
@@ -2483,6 +2518,184 @@
         'repair': { name: 'В ремонте', cls: 'inv-status--repair' },
         'decommissioned': { name: 'Списано', cls: 'inv-status--decommissioned' }
     };
+
+    function resolveEmployeeWorkplace(emp) {
+        if (!emp) return null;
+        if (emp.workplace && emp.workplace.code) {
+            return emp.workplace;
+        }
+        for (const f of (CONFIG.floors || [])) {
+            for (const wp of (f.workplaces || [])) {
+                const wpCode = wp.code || wp.id;
+                if (emp.workplace_id && Number(wp.id) === Number(emp.workplace_id)) {
+                    return { id: wp.id, code: wpCode, room: wp.room, floor_name: f.name };
+                }
+                if (wp.employee && emp.full_name && wp.employee.trim().toLowerCase() === emp.full_name.trim().toLowerCase()) {
+                    return { id: wp.id, code: wpCode, room: wp.room, floor_name: f.name };
+                }
+            }
+        }
+        return null;
+    }
+
+    function applyInvEmployeeSelection(emp, preserveCustomWorkplace = '') {
+        if (emp && emp.id) {
+            if (invEmployeeSelectEl) invEmployeeSelectEl.value = String(emp.id);
+            if (invEmployeeSearchInputEl) invEmployeeSearchInputEl.value = emp.full_name || '';
+            if (invEmployeeClearBtnEl) invEmployeeClearBtnEl.hidden = false;
+
+            const wp = resolveEmployeeWorkplace(emp);
+            const wpCode = (wp && wp.code) ? wp.code : (preserveCustomWorkplace && preserveCustomWorkplace !== 'STOCK' ? preserveCustomWorkplace : 'STOCK');
+            if (invWorkplaceInputEl) invWorkplaceInputEl.value = wpCode;
+            if (invWorkplaceAutoDisplayEl) {
+                if (wp && wp.code) {
+                    const details = [wp.code, wp.room, wp.floor_name].filter(Boolean).join(' · ');
+                    invWorkplaceAutoDisplayEl.textContent = details;
+                    invWorkplaceAutoDisplayEl.classList.add('inv-workplace-auto--assigned');
+                } else if (wpCode && wpCode !== 'STOCK') {
+                    invWorkplaceAutoDisplayEl.textContent = wpCode;
+                    invWorkplaceAutoDisplayEl.classList.add('inv-workplace-auto--assigned');
+                } else {
+                    invWorkplaceAutoDisplayEl.textContent = 'У сотрудника не задан стол (STOCK)';
+                    invWorkplaceAutoDisplayEl.classList.remove('inv-workplace-auto--assigned');
+                }
+            }
+        } else {
+            if (invEmployeeSelectEl) invEmployeeSelectEl.value = '';
+            if (invEmployeeSearchInputEl) invEmployeeSearchInputEl.value = '';
+            if (invEmployeeClearBtnEl) invEmployeeClearBtnEl.hidden = true;
+            const wpCode = (preserveCustomWorkplace && preserveCustomWorkplace !== 'STOCK') ? preserveCustomWorkplace : 'STOCK';
+            if (invWorkplaceInputEl) invWorkplaceInputEl.value = wpCode;
+            if (invWorkplaceAutoDisplayEl) {
+                invWorkplaceAutoDisplayEl.textContent = wpCode !== 'STOCK' ? `${wpCode} (без сотрудника)` : 'На складе (STOCK)';
+                invWorkplaceAutoDisplayEl.classList.toggle('inv-workplace-auto--assigned', wpCode !== 'STOCK');
+            }
+        }
+    }
+
+    function initInvEmployeeAutocomplete() {
+        if (!invEmployeeSearchInputEl || !invEmpAutocompleteListEl) return;
+
+        function highlightMatch(text, query) {
+            if (!query) return escapeHtml(text);
+            const idx = text.toLowerCase().indexOf(query.toLowerCase());
+            if (idx === -1) return escapeHtml(text);
+            const before = escapeHtml(text.slice(0, idx));
+            const match = escapeHtml(text.slice(idx, idx + query.length));
+            const after = escapeHtml(text.slice(idx + query.length));
+            return `${before}<mark>${match}</mark>${after}`;
+        }
+
+        function renderEmpSuggestions(query) {
+            const q = query.trim().toLowerCase();
+            const emps = state.employees || [];
+            const matched = emps.filter((e) => {
+                if (!q) return true;
+                return (e.full_name && e.full_name.toLowerCase().includes(q)) ||
+                       (e.position && e.position.toLowerCase().includes(q)) ||
+                       (e.department && e.department.toLowerCase().includes(q)) ||
+                       (e.email && e.email.toLowerCase().includes(q));
+            }).slice(0, 12);
+
+            invEmpAutocompleteListEl.innerHTML = '';
+
+            if (matched.length === 0) {
+                const emptyEl = el('div', {
+                    class: 'emp-autocomplete-empty',
+                    text: 'Сотрудники не найдены'
+                });
+                invEmpAutocompleteListEl.appendChild(emptyEl);
+                invEmpAutocompleteListEl.hidden = false;
+                return;
+            }
+
+            matched.forEach((e) => {
+                let avatarNode;
+                if (e.photo_url) {
+                    avatarNode = el('img', {
+                        class: 'emp-autocomplete-avatar',
+                        src: e.photo_url,
+                        alt: e.full_name
+                    });
+                } else {
+                    avatarNode = el('div', {
+                        class: 'emp-autocomplete-avatar',
+                        text: e.initials || initials(e.full_name || '—')
+                    });
+                }
+
+                const nameNode = el('div', {
+                    class: 'emp-autocomplete-name',
+                    html: highlightMatch(e.full_name || '', q)
+                });
+                const subParts = [e.position, e.department].filter(Boolean);
+                const subNode = el('div', {
+                    class: 'emp-autocomplete-sub',
+                    text: subParts.join(' · ') || 'Должность не указана'
+                });
+                const infoNode = el('div', { class: 'emp-autocomplete-info' }, [nameNode, subNode]);
+
+                const wp = resolveEmployeeWorkplace(e);
+                const badgeNode = (wp && wp.code)
+                    ? el('span', { class: 'emp-autocomplete-badge', text: wp.code, title: `Рабочее место ${wp.code}` })
+                    : null;
+
+                const row = el('div', {
+                    class: 'emp-autocomplete-item',
+                    onmousedown: (evt) => {
+                        evt.preventDefault();
+                        applyInvEmployeeSelection(e);
+                        if (invStatusSelectEl && invStatusSelectEl.value === 'storage') {
+                            invStatusSelectEl.value = 'assigned';
+                        }
+                        invEmpAutocompleteListEl.hidden = true;
+                    }
+                }, [avatarNode, infoNode, badgeNode]);
+
+                invEmpAutocompleteListEl.appendChild(row);
+            });
+
+            invEmpAutocompleteListEl.hidden = false;
+        }
+
+        invEmployeeSearchInputEl.addEventListener('input', () => {
+            const val = invEmployeeSearchInputEl.value;
+            if (!val.trim()) {
+                applyInvEmployeeSelection(null);
+            } else if (invEmployeeClearBtnEl) {
+                invEmployeeClearBtnEl.hidden = false;
+            }
+            renderEmpSuggestions(val);
+        });
+
+        invEmployeeSearchInputEl.addEventListener('focus', () => {
+            renderEmpSuggestions(invEmployeeSearchInputEl.value);
+        });
+
+        invEmployeeSearchInputEl.addEventListener('blur', () => {
+            setTimeout(() => {
+                invEmpAutocompleteListEl.hidden = true;
+                // Если пользователь ввёл текст, но не выбрал сотрудника — синхронизируем отображение
+                const curEmpId = invEmployeeSelectEl ? Number(invEmployeeSelectEl.value) : 0;
+                if (curEmpId) {
+                    const found = (state.employees || []).find((x) => Number(x.id) === curEmpId);
+                    if (found) invEmployeeSearchInputEl.value = found.full_name;
+                } else {
+                    invEmployeeSearchInputEl.value = '';
+                    if (invEmployeeClearBtnEl) invEmployeeClearBtnEl.hidden = true;
+                }
+            }, 180);
+        });
+
+        if (invEmployeeClearBtnEl) {
+            invEmployeeClearBtnEl.addEventListener('click', () => {
+                applyInvEmployeeSelection(null);
+                invEmpAutocompleteListEl.hidden = true;
+                invEmployeeSearchInputEl.focus();
+            });
+        }
+    }
+    initInvEmployeeAutocomplete();
 
     async function loadInventory() {
         try {
@@ -2577,57 +2790,155 @@
                 openDeleteInventoryModal(item);
             });
 
-            tr.addEventListener('dblclick', () => {
-                openInventoryModal(item);
+            tr.addEventListener('click', () => {
+                openInventoryViewModal(item);
             });
 
             inventoryTableBodyEl.appendChild(tr);
         });
     }
 
-    function populateInvDropdowns() {
-        if (invWorkplaceListEl) {
-            invWorkplaceListEl.innerHTML = '';
-            const places = new Set();
-            (CONFIG.floors || []).forEach((floor) => {
-                (floor.workplaces || []).forEach((wp) => {
-                    const code = wp.name || wp.code;
-                    if (code) places.add(code);
-                });
-            });
-            Array.from(places).sort().forEach((code) => {
-                const opt = document.createElement('option');
-                opt.value = code;
-                invWorkplaceListEl.appendChild(opt);
-            });
+    function openInventoryViewModal(item) {
+        if (!inventoryModalEl || !inventoryViewDialogEl || !item) return;
+        currentEditingInvItem = item;
+        if (inventoryFormEl) inventoryFormEl.hidden = true;
+        inventoryViewDialogEl.hidden = false;
+        inventoryViewDialogEl.innerHTML = '';
+
+        const st = INV_STATUS_MAP[item.status] || { name: item.status || 'В работе', cls: 'inv-status--assigned' };
+        const placeText = (item.workplace_code && item.workplace_code !== 'STOCK') ? item.workplace_code : 'На складе (STOCK)';
+        const assignedEmp = item.employee || (item.employee_id ? (state.employees || []).find((e) => Number(e.id) === Number(item.employee_id)) : null);
+
+        const header = el('div', { class: 'modal__header' }, [
+            el('h2', { text: 'Карточка оборудования' }),
+            el('button', { class: 'icon-btn', type: 'button', html: '&times;', 'aria-label': 'Закрыть', onclick: closeInventoryModal })
+        ]);
+
+        const qrBox = el('div', {
+            class: 'inv-modal-view__qr',
+            title: `QR: ${item.inventory_number || item.id}`,
+            html: createQRCodeSvg(item.inventory_number || String(item.id))
+        });
+
+        const hero = el('div', { class: 'inv-modal-view__hero' }, [
+            el('div', { class: 'inv-modal-view__main' }, [
+                el('div', { class: 'inv-modal-view__badges' }, [
+                    el('span', { class: 'inventory-num', text: item.inventory_number || 'Без номера' }),
+                    el('span', { class: 'inventory-type-pill', text: `${item.type_code || 'EQ'} · ${item.category || 'Другое'}` }),
+                    el('span', { class: `inv-status-badge ${st.cls}`, text: st.name })
+                ]),
+                el('h1', { class: 'emp-modal-view__name', style: 'margin-top: 4px;', text: item.name || 'Оборудование' })
+            ]),
+            qrBox
+        ]);
+
+        let empBlockVal;
+        if (assignedEmp && assignedEmp.full_name) {
+            empBlockVal = el('div', {}, [
+                el('div', { style: 'font-weight: 600;', text: assignedEmp.full_name }),
+                assignedEmp.department ? el('div', { style: 'font-size: 12px; color: var(--text-secondary);', text: `${assignedEmp.position ? assignedEmp.position + ' · ' : ''}${assignedEmp.department}` }) : null,
+                el('button', {
+                    class: 'btn btn--ghost btn--icon-sm',
+                    type: 'button',
+                    style: 'margin-top: 6px;',
+                    text: 'Открыть карточку сотрудника',
+                    onclick: () => {
+                        const fullEmp = (state.employees || []).find((e) => Number(e.id) === Number(assignedEmp.id)) || assignedEmp;
+                        closeInventoryModal();
+                        openEmployeeModal(fullEmp, false);
+                    }
+                })
+            ]);
+        } else {
+            empBlockVal = el('div', { style: 'color: var(--text-secondary);', text: 'Не назначен (на складе или общее оборудование)' });
         }
 
-        if (invEmployeeSelectEl) {
-            invEmployeeSelectEl.innerHTML = '<option value="">Не назначен</option>';
-            (state.employees || []).forEach((emp) => {
-                const opt = document.createElement('option');
-                opt.value = String(emp.id);
-                const dept = emp.department ? ` (${emp.department})` : '';
-                opt.textContent = `${emp.full_name}${dept}`;
-                invEmployeeSelectEl.appendChild(opt);
-            });
-        }
+        const detailsGrid = el('div', { class: 'emp-details-grid' }, [
+            el('div', { class: 'emp-detail-block' }, [
+                el('span', { class: 'emp-detail-block__label', text: 'Ответственный сотрудник' }),
+                el('div', { class: 'emp-detail-block__val' }, [empBlockVal])
+            ]),
+            el('div', { class: 'emp-detail-block' }, [
+                el('span', { class: 'emp-detail-block__label', text: 'Рабочее место / Локация' }),
+                el('div', { class: 'emp-detail-block__val', text: placeText })
+            ]),
+            el('div', { class: 'emp-detail-block' }, [
+                el('span', { class: 'emp-detail-block__label', text: 'Категория' }),
+                el('div', { class: 'emp-detail-block__val', text: item.category || '—' })
+            ]),
+            el('div', { class: 'emp-detail-block' }, [
+                el('span', { class: 'emp-detail-block__label', text: 'Код типа' }),
+                el('div', { class: 'emp-detail-block__val', text: item.type_code || '—' })
+            ]),
+            el('div', { class: 'emp-detail-block emp-detail-block--full' }, [
+                el('span', { class: 'emp-detail-block__label', text: 'Заметки / Характеристики' }),
+                el('div', {
+                    class: 'emp-detail-block__val',
+                    style: item.notes ? 'white-space: pre-wrap; line-height: 1.5;' : 'color: var(--text-secondary);',
+                    text: item.notes || 'Характеристики и заметки не указаны'
+                })
+            ])
+        ]);
+
+        const body = el('div', { class: 'modal__body emp-modal-view' }, [hero, detailsGrid]);
+
+        const footerLeft = el('div', { class: 'modal__footer-left' }, [
+            el('button', {
+                class: 'btn btn--danger-ghost',
+                type: 'button',
+                text: 'Удалить',
+                onclick: () => openDeleteInventoryModal(item)
+            }),
+            el('button', {
+                class: 'btn btn--ghost',
+                type: 'button',
+                text: 'Печать наклейки',
+                onclick: () => printInventorySticker(item)
+            })
+        ]);
+
+        const footerRight = el('div', { class: 'modal__footer-right' }, [
+            el('button', {
+                class: 'btn btn--ghost',
+                type: 'button',
+                text: 'Закрыть',
+                onclick: closeInventoryModal
+            }),
+            el('button', {
+                class: 'btn btn--action',
+                type: 'button',
+                text: 'Изменить',
+                onclick: () => openInventoryModal(item)
+            })
+        ]);
+
+        const footer = el('div', { class: 'modal__footer' }, [footerLeft, footerRight]);
+        inventoryViewDialogEl.append(header, body, footer);
+        inventoryModalEl.hidden = false;
     }
 
     function openInventoryModal(item = null) {
         currentEditingInvItem = item;
-        inventoryFormEl.reset();
-        populateInvDropdowns();
+        if (inventoryViewDialogEl) inventoryViewDialogEl.hidden = true;
+        if (inventoryFormEl) {
+            inventoryFormEl.hidden = false;
+            inventoryFormEl.reset();
+        }
+        if (invEmpAutocompleteListEl) invEmpAutocompleteListEl.hidden = true;
 
         if (item) {
             invModalTitleEl.textContent = 'Редактирование оборудования';
             inventoryFormEl.elements['id'].value = item.id;
             inventoryFormEl.elements['name'].value = item.name || '';
-            invCategorySelectEl.value = item.category || 'Монитор';
-            invTypeCodeInputEl.value = item.type_code || 'MO';
+            const cat = (item.category && CATEGORY_TO_TYPE[item.category]) ? item.category : (TYPE_TO_CATEGORY[item.type_code] || 'Монитор');
+            const tCode = (item.type_code && TYPE_TO_CATEGORY[item.type_code]) ? item.type_code : (CATEGORY_TO_TYPE[cat] || 'MO');
+            invCategorySelectEl.value = cat;
+            invTypeCodeInputEl.value = tCode;
             invStatusSelectEl.value = item.status || 'assigned';
-            invWorkplaceInputEl.value = item.workplace_code || '';
-            invEmployeeSelectEl.value = item.employee_id ? String(item.employee_id) : '';
+
+            const assignedEmp = (item.employee_id ? (state.employees || []).find((e) => Number(e.id) === Number(item.employee_id)) : null) || item.employee || null;
+            applyInvEmployeeSelection(assignedEmp, item.workplace_code || '');
+
             invNumberInputEl.value = item.inventory_number || '';
             invNumberInputEl.placeholder = item.inventory_number || '';
             inventoryFormEl.elements['notes'].value = item.notes || '';
@@ -2641,10 +2952,9 @@
             invCategorySelectEl.value = 'Монитор';
             invTypeCodeInputEl.value = 'MO';
             invStatusSelectEl.value = 'assigned';
-            invWorkplaceInputEl.value = '';
-            invEmployeeSelectEl.value = '';
+            applyInvEmployeeSelection(null);
             invNumberInputEl.value = '';
-            invNumberInputEl.placeholder = 'Оставьте пустым для автогенерации (например INV_MO_9-301_01)';
+            invNumberInputEl.placeholder = 'Оставьте пустым для автогенерации (например INV_MO_1-01_01)';
 
             invDeleteBtnEl.hidden = true;
             invPrintStickerBtnEl.hidden = true;
@@ -2657,6 +2967,9 @@
 
     function closeInventoryModal() {
         inventoryModalEl.hidden = true;
+        if (inventoryViewDialogEl) inventoryViewDialogEl.hidden = true;
+        if (inventoryFormEl) inventoryFormEl.hidden = false;
+        if (invEmpAutocompleteListEl) invEmpAutocompleteListEl.hidden = true;
         currentEditingInvItem = null;
     }
 
@@ -2670,6 +2983,15 @@
             const mapped = CATEGORY_TO_TYPE[invCategorySelectEl.value];
             if (mapped) {
                 invTypeCodeInputEl.value = mapped;
+            }
+        });
+    }
+
+    if (invTypeCodeInputEl) {
+        invTypeCodeInputEl.addEventListener('change', () => {
+            const mappedCat = TYPE_TO_CATEGORY[invTypeCodeInputEl.value];
+            if (mappedCat && invCategorySelectEl) {
+                invCategorySelectEl.value = mappedCat;
             }
         });
     }
@@ -2715,6 +3037,8 @@
                 showToast(isEdit ? 'Оборудование обновлено' : 'Оборудование добавлено', 'success');
                 closeInventoryModal();
                 await loadInventory();
+                await refreshEmployees();
+                render();
             } catch (err) {
                 console.error(err);
                 showToast('Ошибка отправки запроса: ' + (err.message || 'Сбой сети'), 'error');
@@ -2778,11 +3102,101 @@
                 closeDeleteInventoryModal();
                 closeInventoryModal();
                 await loadInventory();
+                await refreshEmployees();
+                render();
             } catch (err) {
                 console.error(err);
                 showToast('Ошибка отправки запроса: ' + (err.message || 'Сбой сети'), 'error');
             } finally {
                 confirmDeleteInventoryBtn.disabled = false;
+            }
+        });
+    }
+
+    // Модальное окно подтверждения списания оборудования (из карточки сотрудника)
+    const decommissionInventoryModal = document.getElementById('decommissionInventoryModal');
+    const decommissionInventoryModalMessage = document.getElementById('decommissionInventoryModalMessage');
+    const confirmDecommissionInventoryBtn = document.getElementById('confirmDecommissionInventoryBtn');
+    let invItemToDecommission = null;
+    let empForDecommission = null;
+
+    function openDecommissionInventoryModal(item, emp = null) {
+        if (!decommissionInventoryModal || !item) return;
+        invItemToDecommission = item;
+        empForDecommission = emp;
+        if (decommissionInventoryModalMessage) {
+            decommissionInventoryModalMessage.innerHTML = `Вы действительно хотите списать оборудование <strong>«${escapeHtml(item.name)}»</strong> (${escapeHtml(item.inventory_number || '')})?`;
+        }
+        decommissionInventoryModal.hidden = false;
+    }
+
+    function closeDecommissionInventoryModal() {
+        if (decommissionInventoryModal) decommissionInventoryModal.hidden = true;
+        invItemToDecommission = null;
+        empForDecommission = null;
+    }
+
+    if (decommissionInventoryModal) {
+        decommissionInventoryModal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', closeDecommissionInventoryModal);
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !decommissionInventoryModal.hidden) {
+                closeDecommissionInventoryModal();
+            }
+        });
+    }
+
+    if (confirmDecommissionInventoryBtn) {
+        confirmDecommissionInventoryBtn.addEventListener('click', async () => {
+            if (!invItemToDecommission) return;
+            const item = invItemToDecommission;
+            const empRef = empForDecommission;
+            confirmDecommissionInventoryBtn.disabled = true;
+
+            try {
+                const payload = {
+                    name: item.name,
+                    category: item.category,
+                    type_code: item.type_code,
+                    status: 'decommissioned',
+                    workplace_code: item.workplace_code || 'STOCK',
+                    employee_id: item.employee_id || null,
+                    inventory_number: item.inventory_number,
+                    notes: item.notes || ''
+                };
+                const resp = await fetch(`/api/inventory/${item.id}/update/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const text = await resp.text();
+                let res = null;
+                try {
+                    res = JSON.parse(text);
+                } catch (parseErr) {}
+
+                if (!resp.ok || (res && res.error)) {
+                    const errorMsg = (res && res.error) || text || ('Ошибка HTTP ' + resp.status);
+                    showToast(errorMsg, 'error');
+                    return;
+                }
+
+                showToast('Оборудование переведено в статус «Списано»', 'success');
+                closeDecommissionInventoryModal();
+                await loadInventory();
+                await refreshEmployees();
+                render();
+
+                if (empRef && employeeModalEl && !employeeModalEl.hidden) {
+                    const updatedEmp = (state.employees || []).find((x) => Number(x.id) === Number(empRef.id)) || empRef;
+                    openEmployeeModal(updatedEmp, false);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Ошибка при списании оборудования: ' + (err.message || 'Сбой сети'), 'error');
+            } finally {
+                confirmDecommissionInventoryBtn.disabled = false;
             }
         });
     }
