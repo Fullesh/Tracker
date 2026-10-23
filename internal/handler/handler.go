@@ -11,10 +11,11 @@ import (
 type Handler struct {
 	db     *gorm.DB
 	pinger *service.PingerService
+	sse    *service.SSEHub
 }
 
-func NewHandler(db *gorm.DB, pinger *service.PingerService) *Handler {
-	return &Handler{db: db, pinger: pinger}
+func NewHandler(db *gorm.DB, pinger *service.PingerService, sse *service.SSEHub) *Handler {
+	return &Handler{db: db, pinger: pinger, sse: sse}
 }
 
 func (h *Handler) InitRoutes() http.Handler {
@@ -26,6 +27,7 @@ func (h *Handler) InitRoutes() http.Handler {
 		staticDir = "../../web/static/"
 	}
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	mux.Handle("/media/", http.StripPrefix("/media/", http.FileServer(http.Dir(staticDir+"/uploads"))))
 
 	// Служебный пинг
 	mux.HandleFunc("/ping", h.Ping)
@@ -50,6 +52,10 @@ func (h *Handler) InitRoutes() http.Handler {
 	mux.HandleFunc("POST /api/tasks/create/{$}", h.CreateTask)
 	mux.HandleFunc("POST /api/tasks/{id}/update/{$}", h.UpdateTask)
 	mux.HandleFunc("POST /api/tasks/{id}/delete/{$}", h.DeleteTask)
+	mux.HandleFunc("GET /api/tasks/events/{$}", h.TaskEvents)
+	mux.HandleFunc("GET /api/tasks/events", h.TaskEvents)
+	mux.HandleFunc("POST /api/tasks/upload-screenshot/{$}", h.UploadTaskScreenshot)
+	mux.HandleFunc("POST /api/tasks/upload-screenshot", h.UploadTaskScreenshot)
 
 	//REST WORKDAY
 	mux.HandleFunc("GET /api/workday/status/{$}", h.GetWorkdayStatus)
