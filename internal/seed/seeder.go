@@ -281,6 +281,7 @@ func seedFloors(db *gorm.DB) error {
 		printerWP := domain.Workplace{
 			FloorID: floor.ID,
 			Code:    fmt.Sprintf("%d-PRN", floor.Order),
+			IP:      fmt.Sprintf("192.168.10.%d", 20+floor.Order),
 			Kind:    "printer",
 			Label:   "МФУ Kyocera",
 			Room:    "Коридор",
