@@ -7,6 +7,15 @@ import (
 	"time"
 )
 
+type createBookingPayload struct {
+	RoomCode  string    `json:"room_code"`
+	RoomName  string    `json:"room_name"`
+	Title     string    `json:"title"`
+	Organizer string    `json:"organizer"`
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
+}
+
 func (h *Handler) GetRoomBookings(w http.ResponseWriter, r *http.Request) {
 	dateStr := r.URL.Query().Get("date")
 	room := r.URL.Query().Get("room")
