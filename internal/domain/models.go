@@ -123,3 +123,14 @@ type Setting struct {
 	Value     string    `gorm:"type:text" json:"value"`
 	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
+
+type RoomBooking struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	RoomCode  string    `gorm:"size:50;index;notnull" json:"room_code"`
+	RoomName  string    `gorm:"size:40;notnull" json:"room_name"`
+	Title     string    `gorm:"size:255;not null" json:"title"`
+	Organizer string    `gorm:"size:100;notnull" json:"organizer"`
+	StartTime time.Time `gorm:"not null;index" json:"start_time"`
+	EndTime   time.Time `gorm:"not null;index" json:"end_time"`
+	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+}
