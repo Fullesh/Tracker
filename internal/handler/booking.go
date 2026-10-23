@@ -24,6 +24,10 @@ type quickBookPayload struct {
 	Organizer       string `json:"organizer"`
 }
 
+type finishEarlyPayload struct {
+	RoomCode string `json:"room_code"`
+}
+
 func (h *Handler) GetRoomBookings(w http.ResponseWriter, r *http.Request) {
 	dateStr := r.URL.Query().Get("date")
 	room := r.URL.Query().Get("room")
