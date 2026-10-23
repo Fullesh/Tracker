@@ -20,6 +20,23 @@ type inventoryPayload struct {
 	InventoryNumber string `json:"inventory_number"`
 }
 
+func (h *Handler) resolveWorkplaceCode(employeeID *uint, fallbackCode string) string {
+	if employeeID != nil && *employeeID > 0 {
+		var emp domain.Employee
+		if err := h.db.Preload("Workplace").First(&emp, *employeeID).Error; err == nil {
+			if emp.Workplace != nil && strings.TrimSpace(emp.Workplace.Code) != "" {
+				return strings.ToUpper(strings.TrimSpace(emp.Workplace.Code))
+			}
+		}
+		return "STOCK"
+	}
+	code := strings.ToUpper(strings.TrimSpace(fallbackCode))
+	if code != "" {
+		return code
+	}
+	return "STOCK"
+}
+
 func (h *Handler) GetInventory(w http.ResponseWriter, r *http.Request) {
 	var items []domain.InventoryItem
 
