@@ -76,5 +76,17 @@ func (h *Handler) InitRoutes() http.Handler {
 	mux.HandleFunc("POST /api/pinger/config/{$}", h.RequireAdmin(h.UpdatePingerConfig))
 	mux.HandleFunc("POST /api/pinger/check-now/{$}", h.RequireAdmin(h.TriggerPingCheck))
 
+	//REST ROOM BOOKING & TABLET
+	mux.HandleFunc("GET /tablet/room/{code}/{$}", h.TabletPage)
+	mux.HandleFunc("GET /tablet/rooms/{code}/{$}", h.TabletPage)
+	mux.HandleFunc("GET /api/rooms/bookings/{$}", h.GetRoomBookings)
+	mux.HandleFunc("POST /api/rooms/bookings/create/{$}", h.CreateRoomBooking)
+	mux.HandleFunc("POST /api/rooms/bookings/{id}/delete/{$}", h.DeleteRoomBooking)
+	mux.HandleFunc("GET /api/rooms/tablet-info/{code}/{$}", h.GetRoomTabletInfo)
+	mux.HandleFunc("GET /api/rooms/tablet-info/{code}", h.GetRoomTabletInfo)
+	mux.HandleFunc("POST /api/rooms/quick-book/{$}", h.QuickBookRoom)
+	mux.HandleFunc("POST /api/rooms/finish-early/{$}", h.FinishMeetingEarly)
+	mux.HandleFunc("POST /api/rooms/extend/{$}", h.ExtendMeeting)
+
 	return mux
 }
