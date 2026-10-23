@@ -205,3 +205,66 @@ func (h *Handler) GetRoomTabletInfo(w http.ResponseWriter, r *http.Request) {
 		"server_time":       now.Format(time.RFC3339),
 	})
 }
+
+func (h *Handler) QuickBookRoom(w http.ResponseWriter, r *http.Request) {
+	var payload quickBookPayload
+	json.NewDecoder(r.Body).Decode(&payload)
+
+	if payload.RoomCode == "" {
+		http.Error(w, "Не указан код переговорной", http.StatusBadRequest)
+		return
+	}
+
+	if payload.DurationMinutes <= 0 {
+		payload.DurationMinutes = 15
+	}
+
+	if payload.Title == "" {
+		payload.Title = "Быстрая встреча"
+	}
+
+	if payload.Organizer == "" {
+		payload.Organizer = "Бронь с экрана"
+	}
+
+	startTime := time.Now()
+	endTime := startTime.Add(time.Duration(payload.DurationMinutes) * time.Minute)
+
+	var conflictCount int64
+	h.db.Model(&domain.RoomBooking{}).
+		Where("room_code = ? AND start_time < ? AND end_time > ?", payload.RoomCode, endTime, startTime).
+		Count(&conflictCount)
+	if conflictCount > 0 {
+		http.Error(w, "Невозможно забронировать: время пересекается со следующей забронированной встречей", http.StatusConflict)
+		return
+	}
+	roomName := payload.RoomCode
+	var wp domain.Workplace
+	if err := h.db.Where("code = ?", payload.RoomCode).First(&wp).Error; err == nil && wp.Room != "" {
+		roomName = wp.Room
+	}
+
+	booking := domain.RoomBooking{
+		RoomCode:  payload.RoomCode,
+		RoomName:  roomName,
+		Title:     payload.Title,
+		Organizer: payload.Organizer,
+		StartTime: startTime,
+		EndTime:   endTime,
+	}
+
+	if err := h.db.Create(&booking).Error; err != nil {
+		http.Error(w, "Ошибка сохранения бронирования: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if h.sse != nil {
+		h.sse.Broadcast("room_booked", booking)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"booking": booking,
+	})
+}
