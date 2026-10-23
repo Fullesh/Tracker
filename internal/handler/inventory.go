@@ -74,11 +74,7 @@ func (h *Handler) CreateInventoryItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.TrimSpace(payload.WorkplaceCode) != "" {
-		wpCode = strings.ToUpper(strings.TrimSpace(payload.WorkplaceCode))
-	} else {
-		wpCode = "STOCK"
-	}
+	wpCode = h.resolveWorkplaceCode(payload.EmployeeID, payload.WorkplaceCode)
 
 	if strings.TrimSpace(payload.Name) == "" {
 		http.Error(w, "Не указано наименование оборудования", http.StatusBadRequest)
@@ -122,6 +118,7 @@ func (h *Handler) CreateInventoryItem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Ошибка сохранения оборудования: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	h.db.Preload("Employee").First(&item, item.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
