@@ -272,3 +272,38 @@ func (h *Handler) QuickBookRoom(w http.ResponseWriter, r *http.Request) {
 		"booking": booking,
 	})
 }
+
+func (h *Handler) FinishMeetingEarly(w http.ResponseWriter, r *http.Request) {
+	var payload quickBookPayload
+	json.NewDecoder(r.Body).Decode(&payload)
+	if payload.RoomCode == "" {
+		http.Error(w, "Не указан код переговорной", http.StatusBadRequest)
+		return
+	}
+
+	now := time.Now()
+	var current domain.RoomBooking
+	err := h.db.Where("room_code = ? AND start_time <= ? AND end_time > ?", payload.RoomCode, now, now).
+		First(&current).Error
+	if err != nil {
+		http.Error(w, "Активная встреча в этой переговорной не найдена", http.StatusNotFound)
+		return
+	}
+
+	current.EndTime = now
+	if err := h.db.Save(&current).Error; err != nil {
+		http.Error(w, "Ошибка обновления встречи: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if h.sse != nil {
+		h.sse.Broadcast("room_freed", map[string]any{
+			"room_code": payload.RoomCode,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+	})
+}
