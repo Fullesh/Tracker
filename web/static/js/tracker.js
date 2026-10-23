@@ -1022,6 +1022,106 @@
             el('button', { class: 'icon-btn', type: 'button', title: 'Закрыть', text: '×', style: 'margin-left:auto', onclick: () => selectPlace(wp.id) }),
         ]));
 
+        if (wp.kind === 'server') {
+            const rackEquip = (state.inventory || []).filter((it) => it.workplace_code === wp.id || it.workplace_code === (wp.code || wp.id));
+            const rackBlock = el('div', { class: 'rack-block' }, [
+                el('div', { class: 'rack-block__head' }, [
+                    el('h4', { class: 'rack-block__title', text: `Оборудование стойки (${rackEquip.length})` }),
+                    el('button', {
+                        class: 'btn btn--ghost btn--icon-sm',
+                        type: 'button',
+                        text: '+ Добавить',
+                        onclick: () => {
+                            openInventoryModal({ workplace_code: wp.code || wp.id, category: 'Сетевое оборудование' });
+                        }
+                    })
+                ])
+            ]);
+
+            if (rackEquip.length === 0) {
+                rackBlock.append(el('div', { class: 'rack-block__empty', text: 'В стойке пока нет оборудования' }));
+            } else {
+                const list = el('div', { class: 'rack-block__list' });
+                rackEquip.forEach((eq) => {
+                    const devStatus = getPingerDeviceStatus(eq.ip);
+                    list.append(el('div', {
+                        class: 'rack-item',
+                        onclick: () => openInventoryViewModal(eq)
+                    }, [
+                        el('div', { class: 'rack-item__main' }, [
+                            el('div', { class: 'rack-item__name' }, [
+                                eq.ip ? el('span', {
+                                    class: `pinger-indicator ${devStatus ? (devStatus.online ? '' : 'pinger-indicator--alert') : 'pinger-indicator--off'}`,
+                                    style: 'display:inline-block; margin-right: 6px;',
+                                    title: devStatus ? (devStatus.online ? 'Доступен по сети' : 'Недоступен!') : 'Статус неизвестен'
+                                }) : null,
+                                el('span', { text: eq.name })
+                            ]),
+                            el('div', { class: 'rack-item__meta' }, [
+                                el('span', { text: `${eq.type_code || 'NW'} · ${eq.inventory_number || 'Без номера'}` }),
+                                eq.ip ? el('span', { class: 'rack-item__ip', text: ` · ${eq.ip}` }) : null
+                            ])
+                        ]),
+                        el('button', {
+                            class: 'btn btn--ghost btn--icon-sm',
+                            type: 'button',
+                            text: '✎',
+                            title: 'Редактировать',
+                            onclick: (e) => {
+                                e.stopPropagation();
+                                openInventoryModal(eq);
+                            }
+                        })
+                    ]));
+                });
+                rackBlock.append(list);
+            }
+            panelEl.append(rackBlock);
+        } else if (wp.kind === 'printer') {
+            const printerEquip = (state.inventory || []).filter((it) => it.workplace_code === wp.id || it.workplace_code === (wp.code || wp.id));
+            if (printerEquip.length > 0) {
+                const pBlock = el('div', { class: 'rack-block' }, [
+                    el('div', { class: 'rack-block__head' }, [
+                        el('h4', { class: 'rack-block__title', text: 'Связанное оборудование' })
+                    ])
+                ]);
+                const pList = el('div', { class: 'rack-block__list' });
+                printerEquip.forEach((pr) => {
+                    const devStatus = getPingerDeviceStatus(pr.ip);
+                    pList.append(el('div', {
+                        class: 'rack-item',
+                        onclick: () => openInventoryViewModal(pr)
+                    }, [
+                        el('div', { class: 'rack-item__main' }, [
+                            el('div', { class: 'rack-item__name' }, [
+                                pr.ip ? el('span', {
+                                    class: `pinger-indicator ${devStatus ? (devStatus.online ? '' : 'pinger-indicator--alert') : 'pinger-indicator--off'}`,
+                                    style: 'display:inline-block; margin-right: 6px;',
+                                    title: devStatus ? (devStatus.online ? 'Доступен по сети' : 'Недоступен!') : 'Статус неизвестен'
+                                }) : null,
+                                el('span', { text: pr.name })
+                            ]),
+                            el('div', { class: 'rack-item__meta' }, [
+                                el('span', { text: `${pr.inventory_number || ''}` }),
+                                pr.ip ? el('span', { class: 'rack-item__ip', text: ` · ${pr.ip}` }) : null
+                            ])
+                        ]),
+                        el('button', {
+                            class: 'btn btn--ghost btn--icon-sm',
+                            type: 'button',
+                            text: '✎',
+                            onclick: (e) => {
+                                e.stopPropagation();
+                                openInventoryModal(pr);
+                            }
+                        })
+                    ]));
+                });
+                pBlock.append(pList);
+                panelEl.append(pBlock);
+            }
+        }
+
         panelEl.append(el('div', { class: 'panel__section-title', text: `Открытые задачи · ${open.length}` }));
         if (open.length) {
             panelEl.append(el('div', { class: 'panel__list' }, open.map((t) => renderCard(t, { draggable: false, showPlace: false }))));
@@ -2482,6 +2582,7 @@
     const invEmployeeClearBtnEl = document.getElementById('invEmployeeClearBtn');
     const invEmpAutocompleteListEl = document.getElementById('invEmpAutocompleteList');
     const invNumberInputEl = document.getElementById('invNumberInput');
+    const invIpInputEl = document.getElementById('invIpInput');
     const invDeleteBtnEl = document.getElementById('invDeleteBtn');
     const invPrintStickerBtnEl = document.getElementById('invPrintStickerBtn');
     const invSaveBtnEl = document.getElementById('invSaveBtn');
@@ -2870,6 +2971,12 @@
                 el('span', { class: 'emp-detail-block__label', text: 'Код типа' }),
                 el('div', { class: 'emp-detail-block__val', text: item.type_code || '—' })
             ]),
+            item.ip ? el('div', { class: 'emp-detail-block' }, [
+                el('span', { class: 'emp-detail-block__label', text: 'IP-адрес' }),
+                el('div', { class: 'emp-detail-block__val' }, [
+                    el('code', { style: 'font-weight: 600; font-size: 13px; color: var(--accent);', text: item.ip })
+                ])
+            ]) : null,
             el('div', { class: 'emp-detail-block emp-detail-block--full' }, [
                 el('span', { class: 'emp-detail-block__label', text: 'Заметки / Характеристики' }),
                 el('div', {
@@ -2921,12 +3028,12 @@
         currentEditingInvItem = item;
         if (inventoryViewDialogEl) inventoryViewDialogEl.hidden = true;
         if (inventoryFormEl) {
-            inventoryFormEl.hidden = false;
             inventoryFormEl.reset();
+            inventoryFormEl.hidden = false;
         }
         if (invEmpAutocompleteListEl) invEmpAutocompleteListEl.hidden = true;
 
-        if (item) {
+        if (item && item.id) {
             invModalTitleEl.textContent = 'Редактирование оборудования';
             inventoryFormEl.elements['id'].value = item.id;
             inventoryFormEl.elements['name'].value = item.name || '';
@@ -2941,6 +3048,7 @@
 
             invNumberInputEl.value = item.inventory_number || '';
             invNumberInputEl.placeholder = item.inventory_number || '';
+            if (invIpInputEl) invIpInputEl.value = item.ip || '';
             inventoryFormEl.elements['notes'].value = item.notes || '';
 
             invDeleteBtnEl.hidden = false;
@@ -2949,12 +3057,14 @@
         } else {
             invModalTitleEl.textContent = 'Новое оборудование';
             inventoryFormEl.elements['id'].value = '';
-            invCategorySelectEl.value = 'Монитор';
-            invTypeCodeInputEl.value = 'MO';
-            invStatusSelectEl.value = 'assigned';
-            applyInvEmployeeSelection(null);
+            const presetCat = (item && item.category) || (item && item.workplace_code ? 'Сетевое оборудование' : 'Монитор');
+            invCategorySelectEl.value = presetCat;
+            invTypeCodeInputEl.value = CATEGORY_TO_TYPE[presetCat] || 'MO';
+            invStatusSelectEl.value = (item && item.status) || 'assigned';
+            applyInvEmployeeSelection(null, (item && item.workplace_code) || '');
             invNumberInputEl.value = '';
             invNumberInputEl.placeholder = 'Оставьте пустым для автогенерации (например INV_MO_1-01_01)';
+            if (invIpInputEl) invIpInputEl.value = (item && item.ip) || '';
 
             invDeleteBtnEl.hidden = true;
             invPrintStickerBtnEl.hidden = true;
@@ -3011,6 +3121,7 @@
                 workplace_code: invWorkplaceInputEl.value.trim(),
                 employee_id: empVal ? Number(empVal) : null,
                 inventory_number: invNumberInputEl.value.trim(),
+                ip: invIpInputEl ? invIpInputEl.value.trim() : '',
                 notes: inventoryFormEl.elements['notes'].value.trim(),
             };
 
@@ -3549,13 +3660,155 @@
         }
     }
 
+    // ---------- Pinger сетевой мониторинг ----------
+    let pingerData = { enabled: false, interval_minutes: 10, devices: [] };
+
+    function getPingerDeviceStatus(ip) {
+        if (!ip || !pingerData || !pingerData.devices) return null;
+        return pingerData.devices.find((d) => d.ip === ip) || null;
+    }
+
+    async function loadPingerStatus() {
+        try {
+            const resp = await fetch('/api/pinger/status/');
+            if (!resp.ok) return;
+            pingerData = await resp.json();
+            updatePingerUI();
+        } catch (err) {
+            console.error('Ошибка загрузки статуса pinger:', err);
+        }
+    }
+
+    function updatePingerUI() {
+        const ind = document.getElementById('pingerIndicator');
+        const countEl = document.getElementById('pingerDeviceCount');
+        const listEl = document.getElementById('pingerDevicesList');
+
+        const devices = pingerData.devices || [];
+        const hasOffline = devices.some((d) => d.checked && !d.online);
+
+        if (ind) {
+            ind.className = 'pinger-indicator';
+            if (!pingerData.enabled) {
+                ind.classList.add('pinger-indicator--off');
+                ind.parentElement.title = 'Pinger: мониторинг выключен';
+            } else if (hasOffline) {
+                ind.classList.add('pinger-indicator--alert');
+                ind.parentElement.title = 'Pinger: обнаружены недоступные устройства!';
+            } else {
+                ind.parentElement.title = 'Pinger: все проверенные устройства доступны';
+            }
+        }
+
+        if (countEl) countEl.textContent = String(devices.length);
+
+        if (listEl) {
+            listEl.innerHTML = '';
+            if (devices.length === 0) {
+                listEl.append(el('div', { class: 'panel__empty', text: 'Нет оборудования с указанным IP-адресом' }));
+            } else {
+                devices.forEach((d) => {
+                    const isOnline = d.online;
+                    const tagCls = d.checked ? (isOnline ? 'pinger-status-tag--online' : 'pinger-status-tag--offline') : '';
+                    const tagText = d.checked ? (isOnline ? 'В сети' : 'Недоступен') : 'Не проверялся';
+                    const lastCheck = d.last_check ? new Date(d.last_check).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+
+                    listEl.append(el('div', { class: 'pinger-device-item' }, [
+                        el('div', { class: 'pinger-device-info' }, [
+                            el('div', { class: 'pinger-device-name', text: d.name || 'Оборудование' }),
+                            el('div', { class: 'pinger-device-sub' }, [
+                                el('span', { text: `${d.kind || 'device'} · ${d.workplace_code || 'Склад'} · ` }),
+                                el('span', { class: 'pinger-device-ip', text: d.ip })
+                            ])
+                        ]),
+                        el('div', { style: 'display:flex; flex-direction:column; align-items:flex-end; gap:4px;' }, [
+                            el('span', { class: `pinger-status-tag ${tagCls}`, text: tagText }),
+                            el('span', { style: 'font-size:11px; color:var(--text-secondary);', text: `Проверка: ${lastCheck}` })
+                        ])
+                    ]));
+                });
+            }
+        }
+    }
+
+    function initPingerModal() {
+        const pingerStatusBtn = document.getElementById('pingerStatusBtn');
+        const pingerModal = document.getElementById('pingerModal');
+        const pingerEnabledToggle = document.getElementById('pingerEnabledToggle');
+        const pingerIntervalInput = document.getElementById('pingerIntervalInput');
+        const savePingerConfigBtn = document.getElementById('savePingerConfigBtn');
+        const pingerCheckNowBtn = document.getElementById('pingerCheckNowBtn');
+
+        if (!pingerModal) return;
+
+        pingerModal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', () => { pingerModal.hidden = true; });
+        });
+
+        if (pingerStatusBtn) {
+            pingerStatusBtn.addEventListener('click', async () => {
+                await loadPingerStatus();
+                if (pingerEnabledToggle) pingerEnabledToggle.checked = Boolean(pingerData.enabled);
+                if (pingerIntervalInput) pingerIntervalInput.value = pingerData.interval_minutes || 10;
+                pingerModal.hidden = false;
+            });
+        }
+
+        if (savePingerConfigBtn) {
+            savePingerConfigBtn.addEventListener('click', async () => {
+                const payload = {
+                    enabled: pingerEnabledToggle ? pingerEnabledToggle.checked : false,
+                    interval_minutes: pingerIntervalInput ? Math.max(1, parseInt(pingerIntervalInput.value, 10) || 10) : 10
+                };
+                try {
+                    const resp = await fetch('/api/pinger/config/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!resp.ok) {
+                        const txt = await resp.text();
+                        showToast('Ошибка сохранения: ' + txt, 'error');
+                        return;
+                    }
+                    showToast('Настройки Pinger сохранены', 'success');
+                    pingerModal.hidden = true;
+                    await loadPingerStatus();
+                } catch (err) {
+                    showToast('Ошибка отправки: ' + err.message, 'error');
+                }
+            });
+        }
+
+        if (pingerCheckNowBtn) {
+            pingerCheckNowBtn.addEventListener('click', async () => {
+                pingerCheckNowBtn.disabled = true;
+                try {
+                    const resp = await fetch('/api/pinger/check-now/', { method: 'POST' });
+                    if (!resp.ok) {
+                        showToast('Ошибка запуска проверки', 'error');
+                        pingerCheckNowBtn.disabled = false;
+                        return;
+                    }
+                    showToast('Опрос оборудования запущен...', 'info');
+                    setTimeout(async () => {
+                        await loadPingerStatus();
+                        pingerCheckNowBtn.disabled = false;
+                    }, 2500);
+                } catch (err) {
+                    pingerCheckNowBtn.disabled = false;
+                    showToast('Ошибка: ' + err.message, 'error');
+                }
+            });
+        }
+    }
+
     initThemeToggle();
     initCookieBanner();
-    if (state.auth && (state.auth.is_admin || state.auth.is_mto)) {
-        loadInventory();
-    } else if (state.view === 'inventory') {
-        loadInventory();
-    }
+    initPingerModal();
+    loadPingerStatus();
+    setInterval(loadPingerStatus, 60000);
+    loadInventory();
     render();
     loadWorkdayStatus();
 })();

@@ -2627,10 +2627,271 @@ html.theme-transitioning *::after {
     background: rgba(0, 119, 255, .2);
     color: #66b2ff;
 }
-[data-theme="dark"] .emp-autocomplete-list,
-.theme-dark .emp-autocomplete-list {
-    box-shadow: 0 8px 28px rgba(0, 0, 0, .55);
+/* ==========================================================================
+   Индикатор Pinger и модальное окно мониторинга
+   ========================================================================== */
+.pinger-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #34a853;
+    display: inline-block;
+    box-shadow: 0 0 6px rgba(52, 168, 83, .6);
 }
+.pinger-indicator--off {
+    background: #7a7a7a;
+    box-shadow: none;
+}
+.pinger-indicator--alert {
+    background: #fc3f1d;
+    box-shadow: 0 0 8px rgba(252, 63, 29, .8);
+    animation: pulse 1.4s infinite;
+}
+
+.pinger-config-box {
+    background: var(--bg-control);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pinger-config-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.pinger-config-row--split {
+    align-items: flex-end;
+}
+
+.switch-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 500;
+}
+
+.switch-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--ya-yellow);
+    cursor: pointer;
+}
+
+.pinger-devices-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+}
+
+.pinger-devices-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.pinger-devices-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.pinger-device-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg-surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+}
+
+.pinger-device-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.pinger-device-name {
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pinger-device-sub {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+
+.pinger-device-ip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    background: var(--bg-control);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.pinger-status-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.pinger-status-tag--online {
+    background: #e6f4ea;
+    color: #137333;
+}
+.pinger-status-tag--offline {
+    background: #ffe0db;
+    color: #d42a0c;
+}
+
+/* ==========================================================================
+   Оборудование серверной стойки в боковой панели карты этажа
+   ========================================================================== */
+.rack-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg-page);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 14px;
+}
+
+.rack-block__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.rack-block__title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: var(--text-secondary);
+}
+
+.rack-block__list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rack-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--bg-surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    cursor: pointer;
+    transition: background .12s, border-color .12s;
+}
+
+.rack-item:hover {
+    background: var(--bg-control);
+    border-color: var(--text-tertiary);
+}
+
+.rack-item__main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.rack-item__name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rack-item__meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.rack-item__ip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--bg-control);
+    padding: 1px 4px;
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+.rack-block__empty {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 14px 8px;
+}
+
+/* Dark mode overrides for Pinger and Rack */
+[data-theme="dark"] .pinger-status-tag--online,
+.theme-dark .pinger-status-tag--online {
+    background: rgba(52, 168, 83, .2);
+    color: #6ee7b7;
+}
+[data-theme="dark"] .pinger-status-tag--offline,
+.theme-dark .pinger-status-tag--offline {
+    background: rgba(252, 63, 29, .22);
+    color: #ff8066;
+}
+[data-theme="dark"] .pinger-config-box,
+.theme-dark .pinger-config-box {
+    background: #16181d;
+}
+[data-theme="dark"] .pinger-device-item,
+.theme-dark .pinger-device-item {
+    background: #1b1d22;
+}
+[data-theme="dark"] .rack-block,
+.theme-dark .rack-block {
+    background: #16181d;
+}
+[data-theme="dark"] .rack-item,
+.theme-dark .rack-item {
+    background: #1b1d22;
+}
+[data-theme="dark"] .rack-item:hover,
+.theme-dark .rack-item:hover {
+    background: #252830;
+}
+
 
 
 

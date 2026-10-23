@@ -71,6 +71,10 @@
                     <input type="search" id="searchInput" placeholder="Поиск: задача, сотрудник, место">
                 </div>
                 <div class="user-pill" id="userPill"></div>
+                <button class="btn btn--ghost" id="pingerStatusBtn" type="button" title="Мониторинг сети (Pinger)">
+                    <span class="pinger-indicator" id="pingerIndicator"></span>
+                    <span>Pinger</span>
+                </button>
                 <button class="btn btn--ghost" id="toggleViewBtn" type="button">
                     <svg viewBox="0 0 24 24" class="btn__icon"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
                     <span id="toggleViewText">Задачи на карте</span>
@@ -383,10 +387,16 @@
                     <div class="inv-workplace-auto" id="invWorkplaceAutoDisplay">На складе (STOCK)</div>
                 </div>
             </div>
-            <label class="field">
-                <span class="field__label">Инвентарный номер</span>
-                <input class="input" name="inventory_number" id="invNumberInput" placeholder="Оставьте пустым для автогенерации (например INV_MO_9-301_01)">
-            </label>
+            <div class="grid-2">
+                <label class="field">
+                    <span class="field__label">Инвентарный номер</span>
+                    <input class="input" name="inventory_number" id="invNumberInput" placeholder="Оставьте пустым для автогенерации (например INV_MO_9-301_01)">
+                </label>
+                <label class="field">
+                    <span class="field__label">IP-адрес (для мониторинга / сети)</span>
+                    <input class="input" name="ip" id="invIpInput" placeholder="например: 192.168.1.50">
+                </label>
+            </div>
             <label class="field">
                 <span class="field__label">Заметки / Характеристики</span>
                 <textarea class="input input--area" name="notes" rows="3" placeholder="Серийный номер, комплектация, особенности"></textarea>
@@ -459,6 +469,48 @@
             <div class="modal__footer-right">
                 <button class="btn btn--ghost" type="button" data-close>Отмена</button>
                 <button class="btn btn--danger" type="button" id="confirmDecommissionInventoryBtn">Списать оборудование</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно управления Pinger -->
+<div class="modal" id="pingerModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--wide">
+        <div class="modal__header">
+            <h2>Сетевой мониторинг (Pinger)</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <div class="pinger-config-box">
+                <div class="pinger-config-row">
+                    <label class="switch-label">
+                        <input type="checkbox" id="pingerEnabledToggle">
+                        <span class="switch-text">Автоматически создавать задачи при потере сетевой доступности</span>
+                    </label>
+                </div>
+                <div class="pinger-config-row pinger-config-row--split">
+                    <label class="field" style="max-width: 220px;">
+                        <span class="field__label">Интервал опроса (минуты)</span>
+                        <input class="input" type="number" id="pingerIntervalInput" min="1" max="1440" value="10">
+                    </label>
+                    <button class="btn btn--ghost" type="button" id="pingerCheckNowBtn">
+                        <svg viewBox="0 0 24 24" class="btn__icon"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+                        <span>Опросить сейчас</span>
+                    </button>
+                </div>
+            </div>
+            <div class="pinger-devices-header">
+                <h3>Опрашиваемое оборудование с IP-адресом</h3>
+                <span class="counter" id="pingerDeviceCount">0</span>
+            </div>
+            <div class="pinger-devices-list" id="pingerDevicesList"></div>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Закрыть</button>
+                <button class="btn btn--action" type="button" id="savePingerConfigBtn">Сохранить настройки</button>
             </div>
         </div>
     </div>
