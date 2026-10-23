@@ -46,7 +46,7 @@ func (h *Handler) InitRoutes() http.Handler {
 	//REST USERS
 	mux.HandleFunc("GET /api/employees/{$}", h.RequireAuth(h.GetEmployees))
 	mux.HandleFunc("POST /api/employees/create/{$}", h.RequireAdmin(h.CreateEmployee))
-	mux.HandleFunc("POST /api/employees/{id}/update/{$}", h.RequireAdmin(h.UpdateEmployee))
+	mux.HandleFunc("POST /api/employees/{id}/update/{$}", h.RequireAuth(h.UpdateEmployee))
 	mux.HandleFunc("POST /api/auth/login/{$}", h.Login)
 	mux.HandleFunc("POST /api/auth/logout/{$}", h.Logout)
 

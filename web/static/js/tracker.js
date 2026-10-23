@@ -1534,7 +1534,12 @@
     function canEditEmployee(emp) {
         if (!emp) return false;
         if (state.auth && state.auth.is_admin) return true;
-        if (state.auth && state.auth.is_authenticated && state.auth.employee_id && Number(state.auth.employee_id) === Number(emp.id)) return true;
+        if (state.auth && state.auth.is_authenticated) {
+            if (state.auth.employee_id && Number(state.auth.employee_id) === Number(emp.id)) return true;
+            if (state.auth.user_id && emp.user && Number(emp.user.id) === Number(state.auth.user_id)) return true;
+            if (state.auth.username && emp.user && emp.user.username === state.auth.username) return true;
+            if (state.auth.employee_name && emp.full_name && emp.full_name.trim().toLowerCase() === state.auth.employee_name.trim().toLowerCase()) return true;
+        }
         return Boolean(state.auth && state.auth.is_authenticated && emp.can_edit);
     }
 
@@ -2180,13 +2185,20 @@
             sidebarFooterEl.innerHTML = '';
             if (state.auth && state.auth.is_authenticated) {
                 let displayName = (state.auth.employee_name || '').trim();
-                if (!displayName && Array.isArray(state.employees)) {
+                let photoUrl = (state.auth.photo_url || '').trim();
+                if (Array.isArray(state.employees)) {
                     const matchedEmp = state.employees.find((e) =>
                         (e.user && state.auth.user_id && e.user.id === state.auth.user_id) ||
-                        (e.user && state.auth.username && e.user.username === state.auth.username)
+                        (e.user && state.auth.username && e.user.username === state.auth.username) ||
+                        (state.auth.employee_name && e.full_name && e.full_name.trim().toLowerCase() === state.auth.employee_name.trim().toLowerCase())
                     );
-                    if (matchedEmp && matchedEmp.full_name) {
-                        displayName = matchedEmp.full_name.trim();
+                    if (matchedEmp) {
+                        if (!displayName && matchedEmp.full_name) {
+                            displayName = matchedEmp.full_name.trim();
+                        }
+                        if (!photoUrl && matchedEmp.photo_url) {
+                            photoUrl = matchedEmp.photo_url.trim();
+                        }
                     }
                 }
                 if (!displayName) {
@@ -2195,17 +2207,70 @@
                 const isAdmin = state.auth.is_admin;
                 const initial = displayName.charAt(0).toUpperCase();
 
-                const profileWrap = el('div', {
-                    style: 'display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;',
-                    title: state.auth.username && state.auth.username !== displayName ? `${displayName} (@${state.auth.username})` : displayName
+                let avatarEl;
+                if (photoUrl) {
+                    avatarEl = el('img', {
+                        src: photoUrl,
+                        alt: displayName,
+                        style: 'width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid var(--line);'
+                    });
+                    avatarEl.onerror = () => {
+                        const fallback = el('span', {
+                            class: 'user-pill__avatar',
+                            style: 'width: 32px; height: 32px; font-size: 13px; flex-shrink: 0;',
+                            text: initial
+                        });
+                        avatarEl.replaceWith(fallback);
+                    };
+                } else {
+                    avatarEl = el('span', {
+                        class: 'user-pill__avatar',
+                        style: 'width: 32px; height: 32px; font-size: 13px; flex-shrink: 0;',
+                        text: initial
+                    });
+                }
+
+                const profileBtn = el('div', {
+                    class: 'sidebar-profile',
+                    title: 'Редактировать профиль' + (state.auth.username && state.auth.username !== displayName ? ` (@${state.auth.username})` : ''),
+                    onclick: () => {
+                        let targetEmp = null;
+                        if (Array.isArray(state.employees)) {
+                            targetEmp = state.employees.find((e) =>
+                                (e.user && state.auth.user_id && e.user.id === state.auth.user_id) ||
+                                (e.user && state.auth.username && e.user.username === state.auth.username) ||
+                                (state.auth.employee_name && e.full_name && e.full_name.trim().toLowerCase() === state.auth.employee_name.trim().toLowerCase())
+                            );
+                        }
+                        if (targetEmp) {
+                            openEmployeeModal(targetEmp, true);
+                        } else if (matchedEmp) {
+                            openEmployeeModal(matchedEmp, true);
+                        } else {
+                            const fallbackEmp = {
+                                id: state.auth.employee_id || 0,
+                                full_name: displayName,
+                                position: isAdmin ? 'Администратор' : 'Сотрудник',
+                                department: '',
+                                photo_url: photoUrl,
+                                workplace: null,
+                                can_edit: true
+                            };
+                            openEmployeeModal(fallbackEmp, true);
+                        }
+                    }
                 }, [
-                    el('div', { style: 'display: flex; align-items: center; gap: 10px; overflow: hidden; min-width: 0; flex: 1;' }, [
-                        el('span', { class: 'user-pill__avatar', text: initial }),
-                        el('div', { style: 'display: flex; flex-direction: column; overflow: hidden; min-width: 0;' }, [
-                            el('span', { style: 'font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;', text: displayName }),
-                            el('span', { style: 'font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;', text: isAdmin ? 'Администратор' : 'Сотрудник' })
-                        ])
-                    ]),
+                    avatarEl,
+                    el('div', { style: 'display: flex; flex-direction: column; overflow: hidden; min-width: 0;' }, [
+                        el('span', { style: 'font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;', text: displayName }),
+                        el('span', { style: 'font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;', text: isAdmin ? 'Администратор' : 'Сотрудник' })
+                    ])
+                ]);
+
+                const profileWrap = el('div', {
+                    style: 'display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;'
+                }, [
+                    profileBtn,
                     el('button', {
                         class: 'btn btn--ghost',
                         style: 'padding: 4px 8px; font-size: 12px; height: 28px; flex-shrink: 0;',
@@ -2315,6 +2380,7 @@
                 if (data.auth) state.auth = data.auth;
                 initEmployeeFilters();
                 populateCreatorList();
+                renderUserPill();
             }
         } catch (e) {
             console.error('Ошибка обновления списка сотрудников:', e);

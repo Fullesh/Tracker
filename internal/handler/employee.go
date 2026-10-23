@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -39,14 +40,16 @@ func saveUploadedPhoto(r *http.Request, empID uint) (string, error) {
 }
 
 func (h *Handler) saveUserCredentials(empID uint, username, password string) error {
-	if username == "" {
-		return nil // логин не передан — ничего не делаем
+	if username == "" && password == "" {
+		return nil // логин и пароль не переданы — ничего не делаем
 	}
 	var user domain.User
 	err := h.db.Where("employee_id = ?", empID).First(&user).Error
 	if err == nil {
-		// 1. Пользователь уже существует — обновляем логин
-		user.Username = username
+		// 1. Пользователь уже существует — обновляем логин и/или пароль
+		if username != "" {
+			user.Username = username
+		}
 		if password != "" {
 			// Если пришёл новый пароль — обновляем хеш
 			hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -56,6 +59,9 @@ func (h *Handler) saveUserCredentials(empID uint, username, password string) err
 			user.PasswordHash = string(hash)
 		}
 		return h.db.Save(&user).Error
+	}
+	if username == "" {
+		return nil
 	}
 	// 2. Пользователя ещё нет — создаём новую учётку
 	var hash []byte
@@ -111,25 +117,57 @@ func (h *Handler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	auth := h.currentAuth(r)
+	isAdmin, _ := auth["is_admin"].(bool)
+	currentUserID, _ := auth["user_id"].(uint)
+	currentEmpName, _ := auth["employee_name"].(string)
+
 	var emp domain.Employee
-	if err := h.db.First(&emp, employeeID).Error; err != nil {
+	if err := h.db.Preload("User").First(&emp, employeeID).Error; err != nil {
 		http.Error(w, "Сотрудник не найден", http.StatusNotFound)
 		return
 	}
 
-	emp.FullName = r.FormValue("full_name")
-	emp.Position = r.FormValue("position")
-	emp.Department = r.FormValue("department")
+	isSelf := false
+	if emp.User != nil && emp.User.ID == currentUserID {
+		isSelf = true
+	} else if currentEmpName != "" && strings.EqualFold(strings.TrimSpace(currentEmpName), strings.TrimSpace(emp.FullName)) {
+		isSelf = true
+	}
+
+	if !isAdmin && !isSelf {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "Доступ запрещён: редактировать карточку может только сам сотрудник или администратор",
+		})
+		return
+	}
+
+	if fn := r.FormValue("full_name"); fn != "" {
+		emp.FullName = fn
+	}
+	if pos := r.FormValue("position"); pos != "" || isAdmin {
+		emp.Position = pos
+	}
+	if dept := r.FormValue("department"); dept != "" || isAdmin {
+		emp.Department = dept
+	}
 	emp.WorkPhone = r.FormValue("work_phone")
 	emp.Email = r.FormValue("email")
-	emp.Equipment = r.FormValue("equipment")
-
-	wpStr := r.FormValue("workplace_id")
-	if wpStr == "" {
-		emp.WorkplaceID = nil
-	} else if wpID, err := strconv.Atoi(wpStr); err == nil {
-		id := uint(wpID)
-		emp.WorkplaceID = &id
+	if isAdmin {
+		emp.Equipment = r.FormValue("equipment")
+		wpStr := r.FormValue("workplace_id")
+		if wpStr == "" {
+			emp.WorkplaceID = nil
+		} else if wpID, err := strconv.Atoi(wpStr); err == nil {
+			id := uint(wpID)
+			emp.WorkplaceID = &id
+		}
+		h.saveUserCredentials(emp.ID, r.FormValue("username"), r.FormValue("password"))
+	} else if r.FormValue("password") != "" {
+		h.saveUserCredentials(emp.ID, "", r.FormValue("password"))
 	}
 
 	if r.FormValue("delete_photo") == "true" {
@@ -144,10 +182,7 @@ func (h *Handler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.db.Preload("Workplace").First(&emp, employeeID)
 	emp.CanEdit = true
-
-	h.saveUserCredentials(emp.ID, r.FormValue("username"), r.FormValue("password"))
 	h.db.Preload("Workplace").Preload("User").Preload("InventoryItems").First(&emp, employeeID)
 
 	w.Header().Set("Content-Type", "application/json")
