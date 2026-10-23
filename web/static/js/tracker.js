@@ -264,7 +264,6 @@
     const toggleViewText = document.getElementById('toggleViewText');
     const toggleViewBtn = document.getElementById('toggleViewBtn');
     const createBtn = document.getElementById('createBtn');
-    const userPillEl = document.getElementById('userPill');
 
     const employeeModalEl = document.getElementById('employeeModal');
     const employeeDialogEl = document.getElementById('employeeDialog');
@@ -2162,12 +2161,9 @@
         if (employeeModalEl) employeeModalEl.hidden = true;
     }
 
-    // ---------- АВТОРИЗАЦИЯ И USER PILL ----------
+    // ---------- АВТОРИЗАЦИЯ И ПРОФИЛЬ В SIDEBAR ----------
 
     function renderUserPill() {
-        if (!userPillEl) return;
-        userPillEl.innerHTML = '';
-
         // Ограничение видимости конструктора только для администратора
         const isAdmin = state.auth && state.auth.is_admin;
         const constructorNav = document.getElementById('constructorNavBtn');
@@ -2179,59 +2175,40 @@
             editFloorBtn.style.display = isAdmin ? '' : 'none';
         }
 
-        userPillEl.classList.toggle('user-pill--guest', !state.auth.is_authenticated);
-
-        if (state.auth.is_authenticated) {
-            const username = state.auth.username || 'Пользователь';
-            const isAdmin = state.auth.is_admin;
-            const initial = username.charAt(0).toUpperCase();
-
-            const avatar = el('span', { class: 'user-pill__avatar', text: initial });
-            const nameSpan = el('span', { style: 'font-weight: 600;', text: username });
-            const roleBadge = el('span', {
-                class: `user-pill__role ${isAdmin ? 'user-pill__role--admin' : ''}`,
-                text: isAdmin ? 'Администратор' : 'Сотрудник'
-            });
-            const logoutBtn = el('button', {
-                class: 'user-pill__btn',
-                type: 'button',
-                text: 'Выйти',
-                onclick: handleLogout
-            });
-
-            userPillEl.append(avatar, nameSpan, roleBadge, logoutBtn);
-        } else {
-            const loginBtn = el('button', {
-                class: 'btn btn--ghost',
-                style: 'padding: 6px 14px; font-size: 13px; height: 34px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;',
-                type: 'button',
-                html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 17l5-5-5-5v3H3v4h7v3zm9-14H5c-1.1 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg> Войти',
-                onclick: () => openLoginModal(false)
-            });
-            userPillEl.append(loginBtn);
-        }
-
         const sidebarFooterEl = document.getElementById('sidebarFooter');
         if (sidebarFooterEl) {
             sidebarFooterEl.innerHTML = '';
-            if (state.auth.is_authenticated) {
-                const username = state.auth.username || 'Пользователь';
+            if (state.auth && state.auth.is_authenticated) {
+                let displayName = (state.auth.employee_name || '').trim();
+                if (!displayName && Array.isArray(state.employees)) {
+                    const matchedEmp = state.employees.find((e) =>
+                        (e.user && state.auth.user_id && e.user.id === state.auth.user_id) ||
+                        (e.user && state.auth.username && e.user.username === state.auth.username)
+                    );
+                    if (matchedEmp && matchedEmp.full_name) {
+                        displayName = matchedEmp.full_name.trim();
+                    }
+                }
+                if (!displayName) {
+                    displayName = state.auth.username || 'Пользователь';
+                }
                 const isAdmin = state.auth.is_admin;
-                const initial = username.charAt(0).toUpperCase();
+                const initial = displayName.charAt(0).toUpperCase();
 
                 const profileWrap = el('div', {
-                    style: 'display: flex; align-items: center; justify-content: space-between; gap: 8px;'
+                    style: 'display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;',
+                    title: state.auth.username && state.auth.username !== displayName ? `${displayName} (@${state.auth.username})` : displayName
                 }, [
-                    el('div', { style: 'display: flex; align-items: center; gap: 10px; overflow: hidden;' }, [
+                    el('div', { style: 'display: flex; align-items: center; gap: 10px; overflow: hidden; min-width: 0; flex: 1;' }, [
                         el('span', { class: 'user-pill__avatar', text: initial }),
-                        el('div', { style: 'display: flex; flex-direction: column; overflow: hidden;' }, [
-                            el('span', { style: 'font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;', text: username }),
-                            el('span', { style: 'font-size: 11px; color: var(--text-secondary);', text: isAdmin ? 'Администратор' : 'Сотрудник' })
+                        el('div', { style: 'display: flex; flex-direction: column; overflow: hidden; min-width: 0;' }, [
+                            el('span', { style: 'font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;', text: displayName }),
+                            el('span', { style: 'font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;', text: isAdmin ? 'Администратор' : 'Сотрудник' })
                         ])
                     ]),
                     el('button', {
                         class: 'btn btn--ghost',
-                        style: 'padding: 4px 8px; font-size: 12px; height: 28px;',
+                        style: 'padding: 4px 8px; font-size: 12px; height: 28px; flex-shrink: 0;',
                         type: 'button',
                         text: 'Выйти',
                         onclick: handleLogout
@@ -2244,7 +2221,7 @@
                     style: 'width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600;',
                     type: 'button',
                     html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 17l5-5-5-5v3H3v4h7v3zm9-14H5c-1.1 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg> Войти в систему',
-                    onclick: () => openLoginModal(false)
+                    onclick: () => { window.location.href = '/login'; }
                 });
                 sidebarFooterEl.append(sidebarLoginBtn);
             }
