@@ -41,6 +41,7 @@
         if (location.hash === '#employees') return 'employees';
         if (location.hash === '#my-tasks') return 'my-tasks';
         if (location.hash === '#inventory') return 'inventory';
+        if (location.hash === '#rooms') return 'rooms';
         return 'board';
     }
 
@@ -50,6 +51,8 @@
         filters: { assignee: '', priority: '', severity: '', query: '' },
         empFilters: { dept: '', workplace: '', floor: '', query: '' },
         invFilters: { status: 'all', category: '', query: '' },
+        roomDate: new Date().toISOString().split('T')[0],
+        roomFloor: '',
         view: parseHashView(),
         floor: String(CONFIG.floors[0]?.id || 1),
         selectedPlace: null,
@@ -272,6 +275,27 @@
     const filterInvCategoryEl = document.getElementById('filterInvCategory');
     const resetInvFiltersEl = document.getElementById('resetInvFilters');
 
+    const roomsViewEl = document.getElementById('roomsView');
+    const roomsGridEl = document.getElementById('roomsGrid');
+    const roomsEmptyEl = document.getElementById('roomsEmpty');
+    const roomFiltersEl = document.getElementById('roomFilters');
+    const roomDateInput = document.getElementById('roomDateInput');
+    const filterRoomFloor = document.getElementById('filterRoomFloor');
+    const todayRoomsBtn = document.getElementById('todayRoomsBtn');
+    const openCreateBookingModalBtn = document.getElementById('openCreateBookingModalBtn');
+    const roomBookingModal = document.getElementById('roomBookingModal');
+    const roomBookingForm = document.getElementById('roomBookingForm');
+    const bookingRoomSelect = document.getElementById('bookingRoomSelect');
+    const bookingDateInput = document.getElementById('bookingDateInput');
+    const bookingStartTime = document.getElementById('bookingStartTime');
+    const bookingEndTime = document.getElementById('bookingEndTime');
+    const bookingOrganizerInput = document.getElementById('bookingOrganizerInput');
+    const bookingErrorMsg = document.getElementById('bookingErrorMsg');
+    const submitBookingBtn = document.getElementById('submitBookingBtn');
+    const deleteBookingModal = document.getElementById('deleteBookingModal');
+    const deleteBookingModalMessage = document.getElementById('deleteBookingModalMessage');
+    const confirmDeleteBookingBtn = document.getElementById('confirmDeleteBookingBtn');
+
     function render() {
         hideHoverCard();
         const isEmployees = state.view === 'employees';
@@ -279,16 +303,19 @@
         const isBoard = state.view === 'board';
         const isMyTasks = state.view === 'my-tasks';
         const isInventory = state.view === 'inventory';
+        const isRooms = state.view === 'rooms';
 
         boardEl.hidden = !isBoard;
         officeEl.hidden = !isMap;
         if (employeesViewEl) employeesViewEl.hidden = !isEmployees;
         if (myTasksViewEl) myTasksViewEl.hidden = !isMyTasks;
         if (inventoryViewEl) inventoryViewEl.hidden = !isInventory;
+        if (roomsViewEl) roomsViewEl.hidden = !isRooms;
 
-        if (taskFiltersEl) taskFiltersEl.hidden = (isEmployees || isMyTasks || isInventory);
+        if (taskFiltersEl) taskFiltersEl.hidden = (isEmployees || isMyTasks || isInventory || isRooms);
         if (employeeFiltersEl) employeeFiltersEl.hidden = !isEmployees;
         if (inventoryFiltersEl) inventoryFiltersEl.hidden = !isInventory;
+        if (roomFiltersEl) roomFiltersEl.hidden = !isRooms;
 
         const canAccessMTO = !!(state.auth.is_admin || state.auth.is_mto);
         const invNavBtn = document.getElementById('inventoryNavBtn');
@@ -300,12 +327,23 @@
                 searchEl.placeholder = 'Поиск по номеру, названию, месту...';
             } else if (isEmployees) {
                 searchEl.placeholder = 'Поиск по ФИО, должности, отделу...';
+            } else if (isRooms) {
+                searchEl.placeholder = 'Поиск по названию или коду переговорной...';
             } else {
                 searchEl.placeholder = 'Поиск по задачам, местам или людям';
             }
         }
 
-        if (isInventory) {
+        if (isRooms) {
+            pageTitleEl.textContent = 'Бронирование переговорных';
+            const roomList = getMeetingRooms();
+            counterEl.textContent = roomList.length;
+            counterEl.title = 'Всего переговорных';
+            toggleViewBtn.hidden = true;
+            createBtn.hidden = false;
+            createBtn.innerHTML = '<span class="btn__plus">+</span> Забронировать';
+            renderRooms();
+        } else if (isInventory) {
             pageTitleEl.textContent = 'Инвентаризация';
             const invList = filteredInventory();
             counterEl.textContent = invList.length;
@@ -1157,6 +1195,64 @@
                 ])
             ]);
             panelEl.append(pBlock);
+        } else if (wp.kind === 'meeting') {
+            const meetingCode = wp.code || wp.id;
+            const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+
+            const mBlock = el('div', { class: 'rack-block' }, [
+                el('div', { class: 'rack-block__head' }, [
+                    el('h4', { class: 'rack-block__title', text: 'Экран переговорной' }),
+                    el('a', {
+                        class: 'btn btn--ghost btn--icon-sm',
+                        href: `/tablet/rooms/${encodeURIComponent(meetingCode)}/`,
+                        target: '_blank',
+                        text: 'Открыть экран ↗',
+                        title: 'Открыть настенный планшет переговорной в новой вкладке'
+                    })
+                ]),
+                el('div', { class: 'rack-block__list', id: 'meetingRoomScheduleBox' }, [
+                    el('div', { class: 'rack-item', style: 'padding: 10px 14px; font-size: 13px; color: var(--text-muted);' }, [
+                        el('span', { text: 'Загрузка расписания бронирований...' })
+                    ])
+                ])
+            ]);
+            panelEl.append(mBlock);
+
+            fetch(`/api/rooms/tablet-info/${encodeURIComponent(meetingCode)}/`)
+                .then(r => r.json())
+                .then(data => {
+                    const box = document.getElementById('meetingRoomScheduleBox');
+                    if (!box) return;
+                    box.innerHTML = '';
+
+                    const isBusy = data.status === 'busy' && data.current_meeting;
+                    const statusTag = el('div', {
+                        style: `display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; margin-bottom: 8px; background: ${isBusy ? 'rgba(239, 68, 68, .15)' : 'rgba(16, 185, 129, .15)'}; color: ${isBusy ? '#ef4444' : '#10b981'};`
+                    }, [
+                        el('span', { style: 'width: 8px; height: 8px; border-radius: 50%; background: currentColor;' }),
+                        document.createTextNode(isBusy ? `Занято: ${data.current_meeting.title}` : 'Свободно прямо сейчас')
+                    ]);
+                    box.append(statusTag);
+
+                    const bookings = data.today_bookings || [];
+                    if (bookings.length === 0) {
+                        box.append(el('div', { style: 'font-size: 12.5px; color: var(--text-muted); padding: 4px 0;', text: 'На сегодня встреч не запланировано' }));
+                    } else {
+                        bookings.forEach(b => {
+                            const isCur = data.current_meeting && Number(data.current_meeting.id) === Number(b.id);
+                            box.append(el('div', {
+                                class: 'rack-item',
+                                style: isCur ? 'border-left: 3px solid #ef4444;' : ''
+                            }, [
+                                el('div', { class: 'rack-item__main' }, [
+                                    el('div', { class: 'rack-item__name', text: b.title }),
+                                    el('div', { class: 'rack-item__meta', text: `${fmtTime(b.start_time)} — ${fmtTime(b.end_time)} · ${b.organizer}` })
+                                ])
+                            ]));
+                        });
+                    }
+                })
+                .catch(() => {});
         }
 
         panelEl.append(el('div', { class: 'panel__section-title', text: `Открытые задачи · ${open.length}` }));
@@ -2277,10 +2373,10 @@
     initEmployeeFilters();
     populateCreatorList();
 
-    // ---------- Переключение доска / карта / сотрудники / мои задачи / инвентаризация ----------
+    // ---------- Переключение доска / карта / сотрудники / мои задачи / инвентаризация / переговорные ----------
     function setView(view) {
         state.view = view;
-        const hash = view === 'map' ? '#map' : (view === 'employees' ? '#employees' : (view === 'my-tasks' ? '#my-tasks' : (view === 'inventory' ? '#inventory' : '#board')));
+        const hash = view === 'map' ? '#map' : (view === 'employees' ? '#employees' : (view === 'my-tasks' ? '#my-tasks' : (view === 'inventory' ? '#inventory' : (view === 'rooms' ? '#rooms' : '#board'))));
         history.replaceState(null, '', hash);
         if (view === 'inventory' && !state.inventoryLoaded) {
             loadInventory();
@@ -2324,6 +2420,10 @@
     });
 
     document.getElementById('createBtn').addEventListener('click', () => {
+        if (state.view === 'rooms') {
+            openRoomBookingModal();
+            return;
+        }
         if (state.view === 'inventory') {
             openInventoryModal();
             return;
@@ -4472,6 +4572,404 @@
         });
     }
 
+    // ==========================================================================
+    // Раздел: Бронирование переговорных комнат
+    // ==========================================================================
+
+    function getMeetingRooms() {
+        let list = (workplaces || []).filter((wp) => wp.kind === 'meeting');
+        if (state.roomFloor) {
+            list = list.filter((wp) => String(wp.floor_id) === String(state.roomFloor));
+        }
+        const q = (state.filters.query || '').trim().toLowerCase();
+        if (q && state.view === 'rooms') {
+            list = list.filter((wp) => {
+                const name = (wp.room || wp.label || '').toLowerCase();
+                const code = (wp.code || wp.id || '').toLowerCase();
+                return name.includes(q) || code.includes(q);
+            });
+        }
+        return list;
+    }
+
+    let deleteBookingTargetId = null;
+
+    function initRoomBooking() {
+        if (filterRoomFloor) {
+            filterRoomFloor.innerHTML = '<option value="">Все этажи</option>';
+            (CONFIG.floors || []).forEach((f) => {
+                const opt = document.createElement('option');
+                opt.value = String(f.id);
+                opt.textContent = f.name;
+                filterRoomFloor.appendChild(opt);
+            });
+            filterRoomFloor.addEventListener('change', () => {
+                state.roomFloor = filterRoomFloor.value;
+                render();
+            });
+        }
+
+        if (roomDateInput) {
+            roomDateInput.value = state.roomDate;
+            roomDateInput.addEventListener('change', () => {
+                state.roomDate = roomDateInput.value || new Date().toISOString().split('T')[0];
+                render();
+            });
+        }
+
+        if (todayRoomsBtn) {
+            todayRoomsBtn.addEventListener('click', () => {
+                state.roomDate = new Date().toISOString().split('T')[0];
+                if (roomDateInput) roomDateInput.value = state.roomDate;
+                render();
+            });
+        }
+
+        if (openCreateBookingModalBtn) {
+            openCreateBookingModalBtn.addEventListener('click', () => openRoomBookingModal());
+        }
+
+        if (roomBookingForm) {
+            roomBookingForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const roomCode = roomBookingForm.room_code.value;
+                const title = roomBookingForm.title.value.trim();
+                const organizer = roomBookingForm.organizer.value.trim();
+                const dateVal = roomBookingForm.date.value;
+                const startTimeVal = roomBookingForm.start_time.value;
+                const endTimeVal = roomBookingForm.end_time.value;
+
+                if (!roomCode || !title || !organizer || !dateVal || !startTimeVal || !endTimeVal) {
+                    showBookingError('Заполните все обязательные поля');
+                    return;
+                }
+
+                const startISO = new Date(`${dateVal}T${startTimeVal}:00`).toISOString();
+                const endISO = new Date(`${dateVal}T${endTimeVal}:00`).toISOString();
+
+                if (new Date(endISO) <= new Date(startISO)) {
+                    showBookingError('Время окончания должно быть позже времени начала');
+                    return;
+                }
+
+                const wp = (workplaces || []).find((w) => (w.code || w.id) === roomCode);
+                const roomName = wp ? (wp.room || wp.label || roomCode) : roomCode;
+
+                if (submitBookingBtn) submitBookingBtn.disabled = true;
+
+                try {
+                    const resp = await fetch('/api/rooms/bookings/create/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCsrfToken()
+                        },
+                        body: JSON.stringify({
+                            room_code: roomCode,
+                            room_name: roomName,
+                            title: title,
+                            organizer: organizer,
+                            start_time: startISO,
+                            end_time: endISO
+                        })
+                    });
+
+                    if (!resp.ok) {
+                        const txt = await resp.text();
+                        showBookingError(txt || 'Ошибка при создании бронирования');
+                        return;
+                    }
+
+                    closeRoomBookingModal();
+                    showToast('Встреча успешно забронирована', 'success');
+                    renderRooms();
+                } catch (err) {
+                    showBookingError('Ошибка сети: ' + err.message);
+                } finally {
+                    if (submitBookingBtn) submitBookingBtn.disabled = false;
+                }
+            });
+        }
+
+        if (confirmDeleteBookingBtn) {
+            confirmDeleteBookingBtn.addEventListener('click', async () => {
+                if (!deleteBookingTargetId) return;
+                confirmDeleteBookingBtn.disabled = true;
+                try {
+                    const resp = await fetch(`/api/rooms/bookings/${deleteBookingTargetId}/delete/`, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': getCsrfToken() }
+                    });
+                    if (!resp.ok) {
+                        const txt = await resp.text();
+                        showToast(txt || 'Ошибка отмены бронирования', 'error');
+                        return;
+                    }
+                    closeDeleteBookingModal();
+                    showToast('Бронирование отменено', 'info');
+                    renderRooms();
+                } catch (err) {
+                    showToast('Ошибка сети: ' + err.message, 'error');
+                } finally {
+                    confirmDeleteBookingBtn.disabled = false;
+                }
+            });
+        }
+
+        [roomBookingModal, deleteBookingModal].forEach((modal) => {
+            if (!modal) return;
+            modal.querySelectorAll('[data-close]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    modal.hidden = true;
+                });
+            });
+        });
+    }
+
+    function showBookingError(msg) {
+        if (!bookingErrorMsg) return;
+        bookingErrorMsg.textContent = msg;
+        bookingErrorMsg.hidden = false;
+    }
+
+    function closeRoomBookingModal() {
+        if (roomBookingModal) roomBookingModal.hidden = true;
+    }
+
+    function closeDeleteBookingModal() {
+        if (deleteBookingModal) deleteBookingModal.hidden = true;
+        deleteBookingTargetId = null;
+    }
+
+    function openRoomBookingModal(preselectedRoomCode) {
+        if (!roomBookingModal) return;
+        if (bookingErrorMsg) bookingErrorMsg.hidden = true;
+        if (roomBookingForm) roomBookingForm.reset();
+
+        const rooms = (workplaces || []).filter((wp) => wp.kind === 'meeting');
+        if (bookingRoomSelect) {
+            bookingRoomSelect.innerHTML = '';
+            rooms.forEach((r) => {
+                const opt = document.createElement('option');
+                opt.value = r.code || r.id;
+                const floor = floorsById[r.floor_id];
+                opt.textContent = `${r.room || r.label || 'Переговорная'} (${r.code || r.id})${floor ? ' · ' + floor.name : ''}`;
+                bookingRoomSelect.appendChild(opt);
+            });
+            if (preselectedRoomCode) {
+                bookingRoomSelect.value = preselectedRoomCode;
+            }
+        }
+
+        if (bookingDateInput) {
+            bookingDateInput.value = state.roomDate || new Date().toISOString().split('T')[0];
+        }
+
+        const now = new Date();
+        const start = new Date(now.getTime() + 5 * 60000);
+        start.setMinutes(Math.ceil(start.getMinutes() / 15) * 15, 0, 0);
+        const end = new Date(start.getTime() + 30 * 60000);
+
+        const pad = (n) => String(n).padStart(2, '0');
+        if (bookingStartTime) bookingStartTime.value = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
+        if (bookingEndTime) bookingEndTime.value = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
+
+        if (bookingOrganizerInput) {
+            bookingOrganizerInput.value = state.auth.employee_name || state.auth.username || '';
+        }
+
+        roomBookingModal.hidden = false;
+    }
+
+    function openDeleteBookingModal(booking) {
+        if (!deleteBookingModal) return;
+        deleteBookingTargetId = booking.id;
+        const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+        if (deleteBookingModalMessage) {
+            deleteBookingModalMessage.innerHTML = `Вы действительно хотите отменить бронирование <strong>«${escapeHtml(booking.title)}»</strong> (${fmtTime(booking.start_time)} — ${fmtTime(booking.end_time)})?`;
+        }
+        deleteBookingModal.hidden = false;
+    }
+
+    async function renderRooms() {
+        if (!roomsGridEl) return;
+        const rooms = getMeetingRooms();
+
+        if (roomsEmptyEl) roomsEmptyEl.hidden = rooms.length > 0;
+        roomsGridEl.innerHTML = '';
+
+        if (!rooms.length) return;
+
+        const isToday = state.roomDate === new Date().toISOString().split('T')[0];
+
+        rooms.forEach((room) => {
+            const roomCode = room.code || room.id;
+            const floor = floorsById[room.floor_id];
+            const roomName = room.room || room.label || 'Переговорная';
+
+            const card = el('div', { class: 'room-card', 'data-room': roomCode });
+
+            const header = el('div', { class: 'room-card__header' }, [
+                el('div', { class: 'room-card__titles' }, [
+                    el('h3', { class: 'room-card__name', text: roomName }),
+                    el('div', { class: 'room-card__meta' }, [
+                        el('span', { class: 'room-card__code-badge', text: roomCode }),
+                        floor ? el('span', { text: floor.name }) : null
+                    ])
+                ]),
+                el('div', { class: 'room-status-badge room-status-badge--free', id: `statusBadge_${roomCode}` }, [
+                    el('span', { class: 'room-status-badge__dot' }),
+                    el('span', { text: 'Свободно' })
+                ])
+            ]);
+
+            const liveBox = el('div', { class: 'room-card__live-box', id: `liveBox_${roomCode}` }, [
+                el('div', { class: 'room-card__live-text', text: 'Загрузка статуса...' }),
+                el('div', { class: 'room-card__live-sub', text: 'Синхронизация с экраном...' })
+            ]);
+
+            const actions = el('div', { class: 'room-card__actions' }, [
+                el('button', {
+                    type: 'button',
+                    class: 'btn btn--action',
+                    style: 'flex: 1;',
+                    onclick: () => openRoomBookingModal(roomCode),
+                    text: '+ Забронировать'
+                }),
+                el('a', {
+                    class: 'btn btn--ghost',
+                    href: `/tablet/rooms/${encodeURIComponent(roomCode)}/`,
+                    target: '_blank',
+                    title: 'Открыть настенный экран переговорной в новой вкладке',
+                    text: 'Экран планшета ↗'
+                })
+            ]);
+
+            const scheduleSection = el('div', { class: 'room-card__schedule-section' }, [
+                el('div', { class: 'room-card__schedule-head' }, [
+                    el('span', { text: isToday ? 'Расписание на сегодня' : `Расписание на ${state.roomDate}` }),
+                    el('span', { id: `scheduleCount_${roomCode}`, text: '0' })
+                ]),
+                el('div', { class: 'room-card__schedule-list', id: `scheduleList_${roomCode}` }, [
+                    el('div', { class: 'room-schedule-empty', text: 'Загрузка расписания...' })
+                ])
+            ]);
+
+            card.append(header);
+            card.append(liveBox);
+            card.append(actions);
+            card.append(scheduleSection);
+            roomsGridEl.append(card);
+
+            loadRoomCardData(roomCode, isToday);
+        });
+    }
+
+    async function loadRoomCardData(roomCode, isToday) {
+        try {
+            const resp = await fetch(`/api/rooms/tablet-info/${encodeURIComponent(roomCode)}/?_=${Date.now()}`, {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache, no-store' }
+            });
+            if (!resp.ok) return;
+            const data = await resp.json();
+
+            const statusBadge = document.getElementById(`statusBadge_${roomCode}`);
+            const liveBox = document.getElementById(`liveBox_${roomCode}`);
+            const scheduleList = document.getElementById(`scheduleList_${roomCode}`);
+            const scheduleCount = document.getElementById(`scheduleCount_${roomCode}`);
+
+            if (!statusBadge || !liveBox || !scheduleList) return;
+
+            const isBusy = data.status === 'busy' && data.current_meeting;
+            const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+
+            if (isBusy) {
+                statusBadge.className = 'room-status-badge room-status-badge--busy';
+                statusBadge.innerHTML = '<span class="room-status-badge__dot"></span><span>Занято</span>';
+            } else {
+                statusBadge.className = 'room-status-badge room-status-badge--free';
+                statusBadge.innerHTML = '<span class="room-status-badge__dot"></span><span>Свободно</span>';
+            }
+
+            liveBox.innerHTML = '';
+            if (isBusy) {
+                const cur = data.current_meeting;
+                liveBox.append(el('div', { class: 'room-card__live-text', style: 'color: #ef4444;', text: `Идёт: ${cur.title}` }));
+                liveBox.append(el('div', {
+                    class: 'room-card__live-sub',
+                    text: `${fmtTime(cur.start_time)} — ${fmtTime(cur.end_time)} · Организатор: ${cur.organizer}`
+                }));
+            } else {
+                if (data.next_meeting) {
+                    liveBox.append(el('div', { class: 'room-card__live-text', style: 'color: #10b981;', text: 'Свободно прямо сейчас' }));
+                    liveBox.append(el('div', {
+                        class: 'room-card__live-sub',
+                        text: `Следующая бронь в ${fmtTime(data.next_meeting.start_time)} (${data.next_meeting.title})`
+                    }));
+                } else {
+                    liveBox.append(el('div', { class: 'room-card__live-text', style: 'color: #10b981;', text: 'Свободно прямо сейчас' }));
+                    liveBox.append(el('div', { class: 'room-card__live-sub', text: 'Доступна на весь день' }));
+                }
+            }
+
+            let bookings = [];
+            if (isToday) {
+                bookings = data.today_bookings || [];
+            } else {
+                const bookResp = await fetch(`/api/rooms/bookings/?date=${encodeURIComponent(state.roomDate)}&room=${encodeURIComponent(roomCode)}`);
+                if (bookResp.ok) {
+                    const resJson = await bookResp.json();
+                    bookings = resJson.bookings || [];
+                }
+            }
+
+            if (scheduleCount) scheduleCount.textContent = String(bookings.length);
+            scheduleList.innerHTML = '';
+
+            if (!bookings.length) {
+                scheduleList.append(el('div', { class: 'room-schedule-empty', text: 'Встреч не запланировано' }));
+                return;
+            }
+
+            const currentAuthName = (state.auth.employee_name || state.auth.username || '').toLowerCase();
+            const isAdmin = !!state.auth.is_admin;
+
+            bookings.forEach((b) => {
+                const isCur = data.current_meeting && Number(data.current_meeting.id) === Number(b.id);
+                const isOwner = currentAuthName && b.organizer && b.organizer.toLowerCase().includes(currentAuthName);
+                const canDelete = isAdmin || isOwner;
+
+                const item = el('div', {
+                    class: 'room-schedule-item' + (isCur ? ' is-current' : '')
+                }, [
+                    el('div', { class: 'room-schedule-item__left' }, [
+                        el('div', { class: 'room-schedule-item__title', text: b.title + (isCur ? ' (сейчас)' : '') }),
+                        el('div', { class: 'room-schedule-item__meta', text: `${fmtTime(b.start_time)} — ${fmtTime(b.end_time)} · ${b.organizer}` })
+                    ])
+                ]);
+
+                if (canDelete) {
+                    const delBtn = el('button', {
+                        type: 'button',
+                        class: 'room-schedule-item__delete-btn',
+                        title: 'Отменить бронь',
+                        html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+                        onclick: (ev) => {
+                            ev.stopPropagation();
+                            openDeleteBookingModal(b);
+                        }
+                    });
+                    item.append(delBtn);
+                }
+
+                scheduleList.append(item);
+            });
+        } catch (err) {
+            console.error('Ошибка загрузки данных комнаты:', err);
+        }
+    }
+
     // ---------- Синхронизация задач в реальном времени (SSE) ----------
     function initTaskEvents() {
         if (typeof EventSource === 'undefined') {
@@ -4543,6 +5041,16 @@
                     }
                 });
 
+                const handleRoomEvent = () => {
+                    if (state.view === 'rooms') {
+                        renderRooms();
+                    }
+                };
+                evtSource.addEventListener('room_booked', handleRoomEvent);
+                evtSource.addEventListener('booking_cancelled', handleRoomEvent);
+                evtSource.addEventListener('room_freed', handleRoomEvent);
+                evtSource.addEventListener('meeting_extended', handleRoomEvent);
+
                 evtSource.onerror = () => {
                     console.warn('[SSE] Обрыв соединения с сервером задач, автоматическое переподключение...');
                 };
@@ -4561,6 +5069,7 @@
     initPrinterSettingsModal();
     initTaskScreenshot();
     initImageViewerModal();
+    initRoomBooking();
     initTaskEvents();
     loadPingerStatus();
     setInterval(loadPingerStatus, 60000);

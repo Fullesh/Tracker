@@ -39,6 +39,10 @@
                 <svg viewBox="0 0 24 24" class="nav-icon"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
                 Сотрудники
             </a>
+            <a class="nav-item" href="#rooms" data-view="rooms" id="roomsNavBtn">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+                Переговорные
+            </a>
             <a class="nav-item" href="#inventory" data-view="inventory" id="inventoryNavBtn" hidden>
                 <svg viewBox="0 0 24 24" class="nav-icon"><path d="M20 2H4c-1 0-2 1-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1-1-2-2-2zm-1 18H5V9h14v11zm1-13H4V4h16v3z"/><path d="M9 12h6v2H9z"/></svg>
                 Инвентаризация
@@ -152,6 +156,19 @@
             <button class="btn btn--ghost" id="resetInvFilters" type="button">Сбросить</button>
         </section>
 
+        <!-- Фильтры переговорных -->
+        <section class="filters" id="roomFilters" hidden>
+            <label class="select">
+                <span class="select__label">Дата</span>
+                <input type="date" class="input input--filter-date" id="roomDateInput" style="padding: 6px 10px; font-size: 13px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--bg-surface); color: var(--text);">
+            </label>
+            <label class="select">
+                <span class="select__label">Этаж</span>
+                <select id="filterRoomFloor"><option value="">Все этажи</option></select>
+            </label>
+            <button class="btn btn--ghost" id="todayRoomsBtn" type="button">Сегодня</button>
+        </section>
+
         <section class="board" id="board"></section>
 
         <!-- Карта офиса -->
@@ -223,6 +240,22 @@
                 <div class="inventory-empty" id="inventoryEmpty" hidden>
                     <p>Оборудование по выбранным критериям не найдено</p>
                 </div>
+            </div>
+        </section>
+
+        <!-- Раздел: Бронирование переговорных -->
+        <section class="rooms-view" id="roomsView" hidden>
+            <div class="rooms-header-bar">
+                <div class="rooms-header-bar__info">
+                    <p class="rooms-header-bar__desc">Интерактивное расписание и бронирование переговорных комнат офиса</p>
+                </div>
+                <button class="btn btn--action" id="openCreateBookingModalBtn" type="button">
+                    <span class="btn__plus">+</span> Забронировать переговорную
+                </button>
+            </div>
+            <div class="rooms-grid" id="roomsGrid"></div>
+            <div class="rooms-empty" id="roomsEmpty" hidden>
+                <p>Переговорные комнаты не найдены</p>
             </div>
         </section>
     </main>
@@ -687,6 +720,73 @@
         <div class="modal__footer">
             <a href="" target="_blank" class="btn btn--ghost" id="imageViewerOpenTabBtn">Открыть в новой вкладке</a>
             <button class="btn btn--action" type="button" data-close>Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно бронирования переговорной -->
+<div class="modal" id="roomBookingModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <form class="modal__dialog" id="roomBookingForm" autocomplete="off">
+        <div class="modal__header">
+            <h2 id="roomBookingModalTitle">Забронировать переговорную</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <label class="field">
+                <span class="field__label">Переговорная комната <span class="req">*</span></span>
+                <select class="input" name="room_code" id="bookingRoomSelect" required></select>
+            </label>
+            <label class="field">
+                <span class="field__label">Тема встречи <span class="req">*</span></span>
+                <input class="input" name="title" required maxlength="150" placeholder="Например: Синхронизация команды">
+            </label>
+            <label class="field">
+                <span class="field__label">Организатор <span class="req">*</span></span>
+                <input class="input" name="organizer" id="bookingOrganizerInput" required maxlength="100" placeholder="Имя организатора">
+            </label>
+            <div class="field">
+                <span class="field__label">Дата встречи <span class="req">*</span></span>
+                <input class="input" type="date" name="date" id="bookingDateInput" required>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <label class="field">
+                    <span class="field__label">Начало <span class="req">*</span></span>
+                    <input class="input" type="time" name="start_time" id="bookingStartTime" required>
+                </label>
+                <label class="field">
+                    <span class="field__label">Окончание <span class="req">*</span></span>
+                    <input class="input" type="time" name="end_time" id="bookingEndTime" required>
+                </label>
+            </div>
+            <div class="form-error" id="bookingErrorMsg" hidden style="color: #ef4444; font-size: 13px; margin-top: 8px; padding: 8px 12px; background: rgba(239,68,68,0.1); border-radius: var(--radius-s); border: 1px solid rgba(239,68,68,0.2);"></div>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--action" type="submit" id="submitBookingBtn">Забронировать</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Модальное окно подтверждения удаления бронирования -->
+<div class="modal" id="deleteBookingModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--small">
+        <div class="modal__header">
+            <h2>Отмена бронирования</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <p id="deleteBookingModalMessage" class="modal__confirm-text"></p>
+            <p class="modal__confirm-sub">Переговорная будет освобождена для других сотрудников.</p>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--danger" type="button" id="confirmDeleteBookingBtn">Отменить бронь</button>
+            </div>
         </div>
     </div>
 </div>
