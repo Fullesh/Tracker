@@ -175,6 +175,7 @@
     const KIND_NAME = { pc: 'Рабочее место', printer: 'Принтер', meeting: 'Переговорная', server: 'Серверная стойка' };
 
     const PIN_ICON = '<svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>';
+    const IMAGE_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
 
     function priorityBadge(id) {
         const p = prioritiesById[id];
@@ -419,6 +420,23 @@
                 el('span', { class: 'card__creator-label', text: 'Создал:' }),
                 document.createTextNode(` ${task.creator}`),
             ]) : null,
+            (() => {
+                const shots = parseScreenshots(task.screenshot);
+                if (!shots.length) return null;
+                const label = shots.length === 1 ? 'Скриншот' : `Скриншоты (${shots.length})`;
+                return el('button', {
+                    type: 'button',
+                    class: 'card__screenshot-badge',
+                    title: `Просмотреть прикрепленные скриншоты (${shots.length})`,
+                    onclick: (e) => {
+                        e.stopPropagation();
+                        openImageViewerList(shots, 0, `${KEY_PREFIX}-${task.id} · ${task.title}`);
+                    }
+                }, [
+                    el('span', { class: 'card__screenshot-icon', html: IMAGE_ICON }),
+                    document.createTextNode(label)
+                ]);
+            })(),
             el('div', { class: 'card__meta' }, [
                 el('div', { class: 'card__tags' }, [priorityBadge(task.priority), severityBadge(task.severity)]),
                 avatar(task.assignee),
@@ -451,6 +469,9 @@
             const task = state.tasks.find((t) => t.id === id);
             if (task && task.status !== column.dataset.status) {
                 task.status = column.dataset.status;
+                if (task.status === 'closed') {
+                    task.screenshot = '';
+                }
                 fetch(`/api/tasks/${task.id}/update/`, {
                     method: 'POST',
                     headers: {
@@ -1198,6 +1219,9 @@
         form.status.value = isEdit ? task.status : (preset.status || CONFIG.statuses[0].id);
         form.priority.value = isEdit ? task.priority : 'normal';
         form.severity.value = isEdit ? task.severity : 's3';
+        if (typeof setTaskScreenshots === 'function') {
+            setTaskScreenshots(isEdit && task.screenshot ? task.screenshot : '');
+        }
 
         modal.hidden = false;
         setTimeout(() => form.title.focus(), 0);
@@ -1205,10 +1229,18 @@
 
     function closeModal() {
         modal.hidden = true;
+        if (typeof setTaskScreenshots === 'function') {
+            setTaskScreenshots('');
+        }
     }
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        let screenshotVal = document.getElementById('taskScreenshotInput')?.value?.trim() || '';
+        if (form.status.value === 'closed') {
+            screenshotVal = '';
+            currentScreenshots = [];
+        }
         const data = {
             title: form.title.value.trim(),
             description: form.description.value.trim(),
@@ -1218,6 +1250,7 @@
             status: form.status.value,
             priority: form.priority.value,
             severity: form.severity.value,
+            screenshot: screenshotVal,
         };
         if (!data.title) { form.title.focus(); return; }
 
@@ -4134,11 +4167,401 @@
         }
     }
 
+    function parseScreenshots(raw) {
+        if (!raw) return [];
+        if (Array.isArray(raw)) return raw.filter(Boolean);
+        if (typeof raw === 'string') {
+            const trimmed = raw.trim();
+            if (!trimmed) return [];
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) return parsed.filter(Boolean);
+                } catch (e) {}
+            }
+            return trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+        }
+        return [];
+    }
+
+    // ---------- Модальное окно просмотра скриншотов / изображений (слайдер) ----------
+    const imageViewerModal = document.getElementById('imageViewerModal');
+    const imageViewerTitle = document.getElementById('imageViewerTitle');
+    const imageViewerImg = document.getElementById('imageViewerImg');
+    const imageViewerCounter = document.getElementById('imageViewerCounter');
+    const imageViewerPrevBtn = document.getElementById('imageViewerPrevBtn');
+    const imageViewerNextBtn = document.getElementById('imageViewerNextBtn');
+    const imageViewerOpenTabBtn = document.getElementById('imageViewerOpenTabBtn');
+
+    let viewerUrls = [];
+    let viewerIndex = 0;
+    let viewerBaseTitle = 'Скриншот задачи';
+
+    function updateImageViewerSlide() {
+        if (!viewerUrls.length) return;
+        const currentUrl = viewerUrls[viewerIndex];
+        if (imageViewerImg) imageViewerImg.src = currentUrl;
+        if (imageViewerOpenTabBtn) imageViewerOpenTabBtn.href = currentUrl;
+        if (imageViewerCounter) {
+            imageViewerCounter.textContent = `${viewerIndex + 1} / ${viewerUrls.length}`;
+            imageViewerCounter.hidden = viewerUrls.length <= 1;
+        }
+        if (imageViewerTitle) {
+            imageViewerTitle.textContent = viewerUrls.length > 1
+                ? `${viewerBaseTitle} (${viewerIndex + 1}/${viewerUrls.length})`
+                : viewerBaseTitle;
+        }
+        if (imageViewerPrevBtn) {
+            imageViewerPrevBtn.disabled = viewerIndex <= 0;
+            imageViewerPrevBtn.hidden = viewerUrls.length <= 1;
+        }
+        if (imageViewerNextBtn) {
+            imageViewerNextBtn.disabled = viewerIndex >= viewerUrls.length - 1;
+            imageViewerNextBtn.hidden = viewerUrls.length <= 1;
+        }
+    }
+
+    function openImageViewerList(urls, startIndex = 0, title = 'Скриншот задачи') {
+        if (!imageViewerModal || !urls || !urls.length) return;
+        viewerUrls = urls;
+        viewerIndex = Math.max(0, Math.min(startIndex, urls.length - 1));
+        viewerBaseTitle = title;
+        updateImageViewerSlide();
+        imageViewerModal.hidden = false;
+    }
+
+    function openImageViewer(url, title = 'Скриншот задачи') {
+        openImageViewerList([url], 0, title);
+    }
+
+    function closeImageViewer() {
+        if (imageViewerModal) imageViewerModal.hidden = true;
+        if (imageViewerImg) imageViewerImg.src = '';
+        viewerUrls = [];
+        viewerIndex = 0;
+    }
+
+    function initImageViewerModal() {
+        if (!imageViewerModal) return;
+        imageViewerModal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', closeImageViewer);
+        });
+        if (imageViewerPrevBtn) {
+            imageViewerPrevBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (viewerIndex > 0) {
+                    viewerIndex--;
+                    updateImageViewerSlide();
+                }
+            });
+        }
+        if (imageViewerNextBtn) {
+            imageViewerNextBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (viewerIndex < viewerUrls.length - 1) {
+                    viewerIndex++;
+                    updateImageViewerSlide();
+                }
+            });
+        }
+        document.addEventListener('keydown', (e) => {
+            if (imageViewerModal.hidden) return;
+            if (e.key === 'Escape') {
+                closeImageViewer();
+            } else if (e.key === 'ArrowLeft' && viewerIndex > 0) {
+                viewerIndex--;
+                updateImageViewerSlide();
+            } else if (e.key === 'ArrowRight' && viewerIndex < viewerUrls.length - 1) {
+                viewerIndex++;
+                updateImageViewerSlide();
+            }
+        });
+    }
+
+    // ---------- Прикрепление скриншотов к задаче (лимит до 10 шт.) ----------
+    const MAX_TASK_SCREENSHOTS = 10;
+    const taskScreenshotInput = document.getElementById('taskScreenshotInput');
+    const taskScreenshotZone = document.getElementById('taskScreenshotZone');
+    const taskScreenshotGrid = document.getElementById('taskScreenshotGrid');
+    const taskScreenshotPrompt = document.getElementById('taskScreenshotPrompt');
+    const taskScreenshotFileInput = document.getElementById('taskScreenshotFileInput');
+    const taskScreenshotCounter = document.getElementById('taskScreenshotCounter');
+    const taskScreenshotLimitMsg = document.getElementById('taskScreenshotLimitMsg');
+
+    let currentScreenshots = [];
+
+    function renderScreenshotGrid() {
+        if (taskScreenshotInput) {
+            taskScreenshotInput.value = currentScreenshots.join(',');
+        }
+        if (taskScreenshotCounter) {
+            taskScreenshotCounter.textContent = `${currentScreenshots.length} / ${MAX_TASK_SCREENSHOTS}`;
+            taskScreenshotCounter.style.color = currentScreenshots.length >= MAX_TASK_SCREENSHOTS ? 'var(--accent)' : 'var(--text-muted)';
+        }
+
+        const isLimitReached = currentScreenshots.length >= MAX_TASK_SCREENSHOTS;
+        if (taskScreenshotPrompt) taskScreenshotPrompt.hidden = isLimitReached;
+        if (taskScreenshotLimitMsg) taskScreenshotLimitMsg.hidden = !isLimitReached;
+        if (taskScreenshotFileInput) taskScreenshotFileInput.disabled = isLimitReached;
+
+        if (!taskScreenshotGrid) return;
+        taskScreenshotGrid.innerHTML = '';
+
+        currentScreenshots.forEach((url, idx) => {
+            const item = el('div', { class: 'task-screenshot-item', title: `Скриншот #${idx + 1} (клик для увеличения)` }, [
+                el('img', { src: url, alt: `Скриншот ${idx + 1}` }),
+                el('button', {
+                    type: 'button',
+                    class: 'task-screenshot-item__del',
+                    title: 'Удалить скриншот',
+                    html: '&times;',
+                    onclick: (e) => {
+                        e.stopPropagation();
+                        removeScreenshot(idx);
+                    }
+                })
+            ]);
+            item.addEventListener('click', () => {
+                openImageViewerList(currentScreenshots, idx, 'Скриншот задачи');
+            });
+            taskScreenshotGrid.append(item);
+        });
+    }
+
+    async function removeScreenshot(idx) {
+        if (idx >= 0 && idx < currentScreenshots.length) {
+            const urlToDelete = currentScreenshots[idx];
+            currentScreenshots.splice(idx, 1);
+            renderScreenshotGrid();
+
+            const taskId = Number(document.getElementById('taskForm')?.id?.value) || null;
+            try {
+                await fetch('/api/tasks/delete-screenshot/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify({ url: urlToDelete, task_id: taskId }),
+                });
+            } catch (err) {
+                console.error('Ошибка удаления файла скриншота:', err);
+            }
+        }
+    }
+
+    function setTaskScreenshots(val) {
+        currentScreenshots = parseScreenshots(val).slice(0, MAX_TASK_SCREENSHOTS);
+        renderScreenshotGrid();
+    }
+
+    async function uploadScreenshotFiles(files) {
+        if (!files || !files.length) return;
+
+        const imgFiles = Array.from(files).filter((f) => f.type && f.type.startsWith('image/'));
+        if (!imgFiles.length) {
+            showToast('Пожалуйста, выберите файлы изображений (PNG, JPG, WebP, GIF)', 'error');
+            return;
+        }
+
+        if (currentScreenshots.length >= MAX_TASK_SCREENSHOTS) {
+            showToast(`Достигнут лимит: максимум ${MAX_TASK_SCREENSHOTS} скриншотов на одну задачу`, 'error');
+            return;
+        }
+
+        const availableSlots = MAX_TASK_SCREENSHOTS - currentScreenshots.length;
+        let filesToUpload = imgFiles;
+        if (imgFiles.length > availableSlots) {
+            showToast(`Выбрано ${imgFiles.length} файлов, будет загружено только ${availableSlots} (лимит: 10)`, 'info');
+            filesToUpload = imgFiles.slice(0, availableSlots);
+        }
+
+        if (taskScreenshotPrompt) {
+            taskScreenshotPrompt.style.opacity = '0.5';
+            taskScreenshotPrompt.style.pointerEvents = 'none';
+        }
+
+        let uploadedCount = 0;
+        for (const file of filesToUpload) {
+            const formData = new FormData();
+            formData.append('screenshot', file);
+
+            try {
+                const resp = await fetch('/api/tasks/upload-screenshot/', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrfToken() },
+                    body: formData,
+                });
+                if (!resp.ok) {
+                    const txt = await resp.text();
+                    throw new Error(txt || 'Ошибка сервера при загрузке');
+                }
+                const data = await resp.json();
+                if (data && data.url) {
+                    currentScreenshots.push(data.url);
+                    uploadedCount++;
+                    renderScreenshotGrid();
+                }
+            } catch (err) {
+                console.error('Ошибка загрузки скриншота:', err);
+                showToast('Ошибка загрузки файла: ' + err.message, 'error');
+            }
+        }
+
+        if (taskScreenshotPrompt) {
+            taskScreenshotPrompt.style.opacity = '1';
+            taskScreenshotPrompt.style.pointerEvents = 'auto';
+        }
+        if (taskScreenshotFileInput) taskScreenshotFileInput.value = '';
+
+        if (uploadedCount > 0) {
+            showToast(`Загружено скриншотов: ${uploadedCount} (всего ${currentScreenshots.length}/${MAX_TASK_SCREENSHOTS})`, 'success');
+        }
+    }
+
+    function initTaskScreenshot() {
+        if (taskScreenshotFileInput) {
+            taskScreenshotFileInput.addEventListener('change', async () => {
+                if (taskScreenshotFileInput.files && taskScreenshotFileInput.files.length > 0) {
+                    await uploadScreenshotFiles(taskScreenshotFileInput.files);
+                }
+            });
+        }
+
+        // Drag & drop файлов на зону загрузки
+        if (taskScreenshotZone) {
+            taskScreenshotZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (currentScreenshots.length < MAX_TASK_SCREENSHOTS) {
+                    taskScreenshotZone.classList.add('task-screenshot-zone--dragover');
+                }
+            });
+            taskScreenshotZone.addEventListener('dragleave', (e) => {
+                if (!taskScreenshotZone.contains(e.relatedTarget)) {
+                    taskScreenshotZone.classList.remove('task-screenshot-zone--dragover');
+                }
+            });
+            taskScreenshotZone.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                taskScreenshotZone.classList.remove('task-screenshot-zone--dragover');
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    await uploadScreenshotFiles(e.dataTransfer.files);
+                }
+            });
+        }
+
+        // Вставка изображений из буфера обмена (Ctrl+V) при открытом окне задачи
+        window.addEventListener('paste', async (e) => {
+            const taskModal = document.getElementById('taskModal');
+            if (!taskModal || taskModal.hidden) return;
+
+            const items = (e.clipboardData || window.clipboardData)?.items;
+            if (!items) return;
+
+            const imageFiles = [];
+            for (const item of items) {
+                if (item.type && item.type.indexOf('image') !== -1) {
+                    const file = item.getAsFile();
+                    if (file) imageFiles.push(file);
+                }
+            }
+            if (imageFiles.length > 0) {
+                e.preventDefault();
+                await uploadScreenshotFiles(imageFiles);
+            }
+        });
+    }
+
+    // ---------- Синхронизация задач в реальном времени (SSE) ----------
+    function initTaskEvents() {
+        if (typeof EventSource === 'undefined') {
+            console.warn('[SSE] EventSource не поддерживается браузером');
+            return;
+        }
+
+        let evtSource = null;
+
+        function connect() {
+            try {
+                evtSource = new EventSource('/api/tasks/events/');
+
+                evtSource.addEventListener('connected', () => {
+                    console.log('[SSE] Соединение реального времени успешно установлено');
+                });
+
+                evtSource.addEventListener('task_created', (e) => {
+                    try {
+                        const task = JSON.parse(e.data);
+                        if (!task || !task.id) return;
+                        const existingIdx = state.tasks.findIndex((t) => Number(t.id) === Number(task.id));
+                        if (existingIdx === -1) {
+                            state.tasks.push(task);
+                            saveTasks();
+                            render();
+                            showToast(`Новая задача ${KEY_PREFIX}-${task.id}: ${task.title}`, 'info');
+                        } else {
+                            Object.assign(state.tasks[existingIdx], task);
+                            saveTasks();
+                            render();
+                        }
+                    } catch (err) {
+                        console.error('[SSE] Ошибка обработки события task_created:', err);
+                    }
+                });
+
+                evtSource.addEventListener('task_updated', (e) => {
+                    try {
+                        const task = JSON.parse(e.data);
+                        if (!task || !task.id) return;
+                        const existing = state.tasks.find((t) => Number(t.id) === Number(task.id));
+                        if (existing) {
+                            Object.assign(existing, task);
+                            saveTasks();
+                            render();
+                        } else {
+                            state.tasks.push(task);
+                            saveTasks();
+                            render();
+                        }
+                    } catch (err) {
+                        console.error('[SSE] Ошибка обработки события task_updated:', err);
+                    }
+                });
+
+                evtSource.addEventListener('task_deleted', (e) => {
+                    try {
+                        const data = JSON.parse(e.data);
+                        if (!data || !data.id) return;
+                        const prevLen = state.tasks.length;
+                        state.tasks = state.tasks.filter((t) => Number(t.id) !== Number(data.id));
+                        if (state.tasks.length !== prevLen) {
+                            saveTasks();
+                            render();
+                        }
+                    } catch (err) {
+                        console.error('[SSE] Ошибка обработки события task_deleted:', err);
+                    }
+                });
+
+                evtSource.onerror = () => {
+                    console.warn('[SSE] Обрыв соединения с сервером задач, автоматическое переподключение...');
+                };
+            } catch (err) {
+                console.error('[SSE] Ошибка подключения:', err);
+            }
+        }
+
+        connect();
+    }
+
     initThemeToggle();
     initCookieBanner();
     initPingerModal();
     initRackDeviceModal();
     initPrinterSettingsModal();
+    initTaskScreenshot();
+    initImageViewerModal();
+    initTaskEvents();
     loadPingerStatus();
     setInterval(loadPingerStatus, 60000);
     loadInventory();

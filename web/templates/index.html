@@ -246,6 +246,26 @@
                 <span class="field__label">Описание</span>
                 <textarea class="input input--area" name="description" rows="4" placeholder="Подробности, шаги воспроизведения, ожидаемый результат"></textarea>
             </label>
+            <div class="field">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <span class="field__label" style="margin-bottom:0;">Скриншоты ошибки / файлы</span>
+                    <span class="task-screenshot-counter" id="taskScreenshotCounter" style="font-size:12px; font-weight:600; color:var(--text-muted);">0 / 10</span>
+                </div>
+                <input type="hidden" name="screenshot" id="taskScreenshotInput">
+                <div class="task-screenshot-zone" id="taskScreenshotZone">
+                    <div class="task-screenshot-grid" id="taskScreenshotGrid"></div>
+                    <div class="task-screenshot-prompt" id="taskScreenshotPrompt">
+                        <label class="btn btn--ghost btn--xs task-screenshot-pick-btn" id="taskScreenshotPickBtn">
+                            <span>Прикрепить файл</span>
+                            <input type="file" id="taskScreenshotFileInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
+                        </label>
+                        <span class="task-screenshot-hint" id="taskScreenshotHint">или вставьте из буфера (Ctrl+V) / перетащите (до 10 шт.)</span>
+                    </div>
+                    <div class="task-screenshot-limit-msg" id="taskScreenshotLimitMsg" style="font-size:12px; color:var(--text-muted); font-style:italic;" hidden>
+                        Прикреплено максимальное количество скриншотов (10 из 10)
+                    </div>
+                </div>
+            </div>
             <div class="grid-2">
                 <label class="field">
                     <span class="field__label">Создал</span>
@@ -645,6 +665,29 @@
                 </div>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Модальное окно просмотра скриншота/изображения -->
+<div class="modal" id="imageViewerModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--image-viewer">
+        <div class="modal__header">
+            <h3 id="imageViewerTitle">Скриншот задачи</h3>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span id="imageViewerCounter" style="font-size:12px; font-weight:600; color:var(--text-muted);">1 / 1</span>
+                <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+            </div>
+        </div>
+        <div class="modal__body image-viewer-body">
+            <button type="button" class="image-viewer-nav-btn image-viewer-nav-btn--prev" id="imageViewerPrevBtn" title="Предыдущий скриншот" aria-label="Предыдущий">&lsaquo;</button>
+            <img src="" alt="Изображение задачи" id="imageViewerImg" class="image-viewer-img">
+            <button type="button" class="image-viewer-nav-btn image-viewer-nav-btn--next" id="imageViewerNextBtn" title="Следующий скриншот" aria-label="Следующий">&rsaquo;</button>
+        </div>
+        <div class="modal__footer">
+            <a href="" target="_blank" class="btn btn--ghost" id="imageViewerOpenTabBtn">Открыть в новой вкладке</a>
+            <button class="btn btn--action" type="button" data-close>Закрыть</button>
+        </div>
     </div>
 </div>
 
