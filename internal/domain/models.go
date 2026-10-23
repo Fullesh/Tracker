@@ -35,6 +35,7 @@ type Floor struct {
 type Workplace struct {
 	ID       uint   `gorm:"primaryKey" json:"id"`
 	FloorID  uint   `gorm:"not null;index" json:"floor_id"`
+	IP       string `gorm:"size:45" json:"ip"`
 	Code     string `gorm:"size:20;uniqueIndex;not null" json:"code"`
 	Kind     string `gorm:"size:20;default:'pc';not null" json:"kind"`
 	Employee string `gorm:"size:150" json:"employee"`
@@ -103,6 +104,7 @@ type WorkSession struct {
 type InventoryItem struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`
 	InventoryNumber string    `gorm:"size:100;uniqueIndex;notnull" json:"inventory_number"`
+	IP              string    `gorm:"size:45" json:"ip"`
 	Name            string    `gorm:"size:200;notnull" json:"name"`
 	Category        string    `gorm:"size:50;notnull;index" json:"category"`
 	TypeCode        string    `gorm:"size:10;notnull" json:"type_code"`
