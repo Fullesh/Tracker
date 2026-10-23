@@ -74,6 +74,7 @@ type Task struct {
 	Status      string    `gorm:"size:50;default:'created';not null;index" json:"status"`
 	Priority    string    `gorm:"size:50;default:'urgent';not null;index" json:"priority"`
 	Severity    string    `gorm:"size:50;default:'minor';not null;index" json:"severity"`
+	Screenshot  string    `gorm:"size:500" json:"screenshot"`
 	CreatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
