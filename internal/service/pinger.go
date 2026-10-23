@@ -26,6 +26,7 @@ type DeviceStatus struct {
 
 type PingerService struct {
 	db              *gorm.DB
+	sse             *SSEHub
 	mu              sync.RWMutex
 	enabled         bool
 	intervalMinutes int
@@ -33,7 +34,7 @@ type PingerService struct {
 	stopCh          chan struct{}
 }
 
-func NewPingerService(db *gorm.DB) *PingerService {
+func NewPingerService(db *gorm.DB, sse *SSEHub) *PingerService {
 	enabled := false
 	if envVal := os.Getenv("PINGER_ENABLED"); envVal == "true" || envVal == "1" {
 		enabled = true
@@ -52,6 +53,7 @@ func NewPingerService(db *gorm.DB) *PingerService {
 	}
 	return &PingerService{
 		db:              db,
+		sse:             sse,
 		enabled:         enabled,
 		intervalMinutes: interval,
 		statuses:        make(map[string]DeviceStatus),
@@ -187,6 +189,9 @@ func (p *PingerService) ensureAlertTask(name, ip, wpCode string, wpID *uint) {
 		log.Printf("[pinger] Ошибка создания задачи для %s: %v", name, err)
 	} else {
 		log.Printf("[pinger] Создана задача #%d о недоступности %s (%s)", task.ID, name, ip)
+		if p.sse != nil {
+			p.sse.Broadcast("task_created", task)
+		}
 	}
 }
 
