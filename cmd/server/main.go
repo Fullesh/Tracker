@@ -5,6 +5,7 @@ import (
 	"PTracker/internal/handler"
 	"PTracker/internal/repository"
 	"PTracker/internal/seed"
+	"PTracker/internal/service"
 	"flag"
 	"log"
 	"net/http"
@@ -25,7 +26,9 @@ func main() {
 	sqlDB, _ := db.DB()
 	defer sqlDB.Close()
 
-	h := handler.NewHandler(db)
+	pingerSvc := service.NewPingerService(db)
+	pingerSvc.Start()
+	h := handler.NewHandler(db, pingerSvc)
 	router := h.InitRoutes()
 
 	if *resetFlag {

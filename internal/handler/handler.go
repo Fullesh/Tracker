@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"PTracker/internal/service"
 	"net/http"
 	"os"
 
@@ -8,11 +9,12 @@ import (
 )
 
 type Handler struct {
-	db *gorm.DB
+	db     *gorm.DB
+	pinger *service.PingerService
 }
 
-func NewHandler(db *gorm.DB) *Handler {
-	return &Handler{db: db}
+func NewHandler(db *gorm.DB, pinger *service.PingerService) *Handler {
+	return &Handler{db: db, pinger: pinger}
 }
 
 func (h *Handler) InitRoutes() http.Handler {
@@ -60,6 +62,11 @@ func (h *Handler) InitRoutes() http.Handler {
 	mux.HandleFunc("POST /api/inventory/create/{$}", h.RequireMTOOrAdmin(h.CreateInventoryItem))
 	mux.HandleFunc("POST /api/inventory/{id}/update/{$}", h.RequireMTOOrAdmin(h.UpdateInventoryItem))
 	mux.HandleFunc("POST /api/inventory/{id}/delete/{$}", h.RequireMTOOrAdmin(h.DeleteInventoryItem))
+
+	// REST PINGER SERVICE
+	mux.HandleFunc("GET /api/pinger/status/{$}", h.GetPingerStatus)
+	mux.HandleFunc("POST /api/pinger/config/{$}", h.RequireAdmin(h.UpdatePingerConfig))
+	mux.HandleFunc("POST /api/pinger/check-now/{$}", h.RequireAdmin(h.TriggerPingCheck))
 
 	return mux
 }

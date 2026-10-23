@@ -13,6 +13,7 @@ type inventoryPayload struct {
 	Name            string `json:"name"`
 	Category        string `json:"category"`
 	TypeCode        string `json:"type_code"`
+	IP              string `json:"ip"`
 	Status          string `json:"status"`
 	WorkplaceCode   string `json:"workplace_code"`
 	EmployeeID      *uint  `json:"employee_id"`
@@ -109,6 +110,7 @@ func (h *Handler) CreateInventoryItem(w http.ResponseWriter, r *http.Request) {
 		Name:            strings.TrimSpace(payload.Name),
 		Category:        payload.Category,
 		TypeCode:        typeCode,
+		IP:              strings.TrimSpace(payload.IP),
 		Status:          status,
 		WorkplaceCode:   wpCode,
 		EmployeeID:      payload.EmployeeID,
@@ -164,6 +166,7 @@ func (h *Handler) UpdateInventoryItem(w http.ResponseWriter, r *http.Request) {
 	item.EmployeeID = payload.EmployeeID
 	item.WorkplaceCode = h.resolveWorkplaceCode(item.EmployeeID, payload.WorkplaceCode)
 	item.Notes = payload.Notes
+	item.IP = strings.TrimSpace(payload.IP)
 
 	if err := h.db.Save(&item).Error; err != nil {
 		http.Error(w, "Ошибка обновления оборудования: "+err.Error(), http.StatusInternalServerError)
