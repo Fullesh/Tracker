@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>{{ .RoomName }} — Планшет {{ if .IsInside }}(Внутри){{ else }}(Снаружи){{ end }}</title>
+    <style>
+        :root {
+            --bg-base: #0b0f17;
+            --bg-card: #131a26;
+            --bg-card-hover: #1a2333;
+            --bg-panel: rgba(19, 26, 38, 0.85);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(255, 255, 255, 0.15);
+
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+
+            --free-color: #10b981;
+            --free-bg: rgba(16, 185, 129, 0.12);
+            --free-border: rgba(16, 185, 129, 0.35);
+            --free-glow: rgba(16, 185, 129, 0.25);
+
+            --busy-color: #f43f5e;
+            --busy-bg: rgba(244, 63, 94, 0.12);
+            --busy-border: rgba(244, 63, 94, 0.35);
+            --busy-glow: rgba(244, 63, 94, 0.25);
+
+            --accent-blue: #3b82f6;
+            --accent-blue-hover: #2563eb;
+            --accent-yellow: #f59e0b;
+
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(30, 41, 59, 0.5) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(15, 23, 42, 0.8) 0%, transparent 50%);
+        }
+
+        body[data-status="free"] {
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(16, 185, 129, 0.15) 0%, transparent 45%),
+                radial-gradient(circle at 85% 85%, rgba(5, 150, 105, 0.08) 0%, transparent 40%);
+        }
+
+        body[data-status="busy"] {
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(244, 63, 94, 0.16) 0%, transparent 45%),
+                radial-gradient(circle at 85% 85%, rgba(225, 29, 72, 0.08) 0%, transparent 40%);
+        }
+
+        .tablet-layout {
+            display: flex;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+            padding: 24px 32px;
+            gap: 20px;
+        }
+
+        /* ------------------ Top Bar ------------------ */
+        .tablet-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .room-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .room-code-tag {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-highlight);
+            color: var(--text-secondary);
+        }
+
+        .room-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.02em;
+        }
+
+        .location-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .location-pill--inside {
+            background: rgba(59, 130, 246, 0.12);
+            border-color: rgba(59, 130, 246, 0.3);
+            color: #93c5fd;
+        }
+
+        .location-pill--outside {
+            background: rgba(245, 158, 11, 0.12);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: #fcd34d;
+        }
+
+        .header-info {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .time-box {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .digital-clock {
+            font-family: var(--font-mono);
+            font-size: 32px;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: -0.02em;
+            color: #ffffff;
+        }
+
+        .date-string {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            text-transform: capitalize;
+        }
+
+        .live-status-dot {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .dot-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 8px #10b981;
+        }
+
+        .dot-indicator.offline {
+            background: #ef4444;
+            box-shadow: 0 0 8px #ef4444;
+        }
+
+        .btn-fullscreen {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            padding: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .btn-fullscreen:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+
+        /* ------------------ Main Content Area ------------------ */
+        .tablet-body {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 24px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* Left Hero Column */
+        .hero-column {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-height: 0;
+        }
+
+        .status-hero-card {
+            flex: 1;
+            border-radius: 20px;
+            padding: 32px 36px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        body[data-status="free"] .status-hero-card {
+            border-color: var(--free-border);
+            box-shadow: 0 0 40px -10px var(--free-glow);
+        }
+
+        body[data-status="busy"] .status-hero-card {
+            border-color: var(--busy-border);
+            box-shadow: 0 0 40px -10px var(--busy-glow);
+        }
+
+        .status-badge-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding: 8px 20px;
+            border-radius: 999px;
+        }
+
+        .status-badge--free {
+            background: var(--free-bg);
+            border: 1px solid var(--free-border);
+            color: var(--free-color);
+        }
+
+        .status-badge--busy {
+            background: var(--busy-bg);
+            border: 1px solid var(--busy-border);
+            color: var(--busy-color);
+        }
+
+        .status-badge__pulse {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .status-badge--free .status-badge__pulse {
+            background: var(--free-color);
+            box-shadow: 0 0 12px var(--free-color);
+            animation: pulse-green 2s infinite;
+        }
+
+        .status-badge--busy .status-badge__pulse {
+            background: var(--busy-color);
+            box-shadow: 0 0 12px var(--busy-color);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .countdown-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            text-align: right;
+        }
+
+        .countdown-label {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .countdown-timer {
+            font-family: var(--font-mono);
+            font-size: 56px;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -0.03em;
+            color: #ffffff;
+        }
+
+        body[data-status="busy"] .countdown-timer {
+            color: #fda4af;
+            text-shadow: 0 0 24px rgba(244, 63, 94, 0.4);
+        }
+
+        body[data-status="free"] .countdown-timer {
+            color: #6ee7b7;
+        }
+
+        /* Meeting Info Center Area */
+        .meeting-hero-info {
+            margin: 24px 0;
+        }
+
+        .meeting-title {
+            font-size: 36px;
+            font-weight: 800;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
+            color: #ffffff;
+            margin-bottom: 12px;
+            word-break: break-word;
+        }
+
+        .meeting-sub {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 18px;
+            color: var(--text-secondary);
+        }
+
+        .meeting-sub-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .meeting-sub-item svg {
+            color: var(--text-muted);
+        }
+
+        .meeting-sub-organizer {
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        /* Progress Bar */
+        .progress-bar-wrap {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            overflow: hidden;
+            margin-top: 18px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            transition: width 0.5s ease-out;
+        }
+
+        body[data-status="busy"] .progress-bar-fill {
+            background: linear-gradient(90deg, #f43f5e, #fb7185);
+            box-shadow: 0 0 10px rgba(244, 63, 94, 0.5);
+        }
+
+        body[data-status="free"] .progress-bar-fill {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        /* Next Meeting Strip */
+        .next-meeting-strip {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 18px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            font-size: 15px;
+            color: var(--text-secondary);
+        }
+
+        .next-meeting-strip strong {
+            color: #ffffff;
+        }
+
+        /* Actions Card */
+        .actions-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 20px 28px;
+            flex-shrink: 0;
+        }
+
+        .actions-card__header {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .actions-card__row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        /* Buttons */
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            height: 54px;
+            padding: 0 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-action:active {
+            transform: scale(0.97);
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-success {
+            background: #059669;
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+        }
+
+        .btn-success:hover {
+            background: #047857;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-highlight);
+            color: #ffffff;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            color: #fca5a5;
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.25);
+            color: #ffffff;
+        }
+
+        /* Readonly Notice for Outside Screen */
+        .readonly-notice {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 20px;
+            border-radius: 12px;
+            background: rgba(244, 63, 94, 0.05);
+            border: 1px dashed rgba(244, 63, 94, 0.25);
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.5;
+            width: 100%;
+        }
+
+        .readonly-notice svg {
+            flex-shrink: 0;
+            color: #fb7185;
+        }
+
+        /* Right Column (Schedule) */
+        .schedule-column {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .schedule-header {
+            padding: 20px 24px 16px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .schedule-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .schedule-count-pill {
+            font-size: 12px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-secondary);
+        }
+
+        .schedule-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .schedule-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .schedule-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+        }
+
+        .schedule-item {
+            padding: 14px 16px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .schedule-item--current {
+            background: rgba(244, 63, 94, 0.1);
+            border-color: rgba(244, 63, 94, 0.4);
+        }
+
+        .schedule-item--upcoming {
+            border-color: rgba(59, 130, 246, 0.3);
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .schedule-item--past {
+            opacity: 0.45;
+        }
+
+        .schedule-item__time-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .schedule-item__time {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 700;
+            color: #93c5fd;
+        }
+
+        .schedule-item--current .schedule-item__time {
+            color: #fda4af;
+        }
+
+        .schedule-item__tag {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(244, 63, 94, 0.2);
+            color: #fda4af;
+        }
+
+        .schedule-item__tag--upcoming {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+        }
+
+        .schedule-item__tag--past {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-muted);
+        }
+
+        .schedule-item__title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .schedule-item__organizer {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .schedule-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* ------------------ Modal Dialog ------------------ */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-dialog {
+            width: 480px;
+            max-width: 90vw;
+            background: #182234;
+            border: 1px solid var(--border-highlight);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            transform: scale(0.95);
+            transition: transform 0.2s ease;
+        }
+
+        .modal-overlay.active .modal-dialog {
+            transform: scale(1);
+        }
+
+        .modal-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 8px;
+        }
+
+        .modal-desc {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .modal-form-group {
+            margin-bottom: 18px;
+        }
+
+        .modal-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .modal-input {
+            width: 100%;
+            height: 48px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0 16px;
+            font-size: 15px;
+            color: #ffffff;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .modal-input:focus {
+            border-color: #3b82f6;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .modal-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        /* ------------------ Toast Notification ------------------ */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 2000;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: #1e293b;
+            color: #ffffff;
+            border: 1px solid var(--border-highlight);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border-radius: 12px;
+            padding: 14px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: auto;
+        }
+
+        .toast--error {
+            background: #450a0a;
+            border-color: #991b1b;
+            color: #fecaca;
+        }
+
+        .toast--success {
+            background: #064e3b;
+            border-color: #065f46;
+            color: #a7f3d0;
+        }
+
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Responsive adaptation for small tablets or portrait */
+        @media (max-width: 900px) {
+            .tablet-layout {
+                padding: 16px;
+            }
+            .tablet-body {
+                grid-template-columns: 1fr;
+                overflow-y: auto;
+            }
+            .schedule-column {
+                display: none;
+            }
+            .meeting-title {
+                font-size: 28px;
+            }
+            .countdown-timer {
+                font-size: 44px;
+            }
+        }
+    </style>
+</head>
+<body data-status="free">
+
+<div class="tablet-layout">
+    <!-- Header -->
+    <header class="tablet-header">
+        <div class="room-meta">
+            <span class="room-code-tag">{{ .RoomCode }}</span>
+            <h1 class="room-title">{{ .RoomName }}</h1>
+            <span class="location-pill {{ if .IsInside }}location-pill--inside{{ else }}location-pill--outside{{ end }}" id="locationBadge">
+                {{ if .IsInside }}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                    Планшет внутри
+                {{ else }}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                    Экран снаружи
+                {{ end }}
+            </span>
+        </div>
+
+        <div class="header-info">
+            <div class="live-status-dot" title="Связь с сервером обновлений">
+                <span class="dot-indicator" id="sseDot"></span>
+                <span id="sseStatusText">В сети</span>
+            </div>
+            <div class="time-box">
+                <div class="digital-clock" id="digitalClock">--:--:--</div>
+                <div class="date-string" id="dateString">Загрузка даты...</div>
+            </div>
+            <button class="btn-fullscreen" id="fullscreenBtn" title="Полноэкранный режим">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="tablet-body">
+        <!-- Hero Column (Left) -->
+        <div class="hero-column">
+            <!-- Status Card -->
+            <section class="status-hero-card">
+                <div class="status-badge-wrap">
+                    <div class="status-badge status-badge--free" id="statusBadge">
+                        <span class="status-badge__pulse"></span>
+                        <span id="statusBadgeText">Свободно</span>
+                    </div>
+
+                    <div class="countdown-container">
+                        <div class="countdown-label" id="countdownLabel">Доступно для бронирования</div>
+                        <div class="countdown-timer" id="countdownTimer">--:--</div>
+                    </div>
+                </div>
+
+                <div class="meeting-hero-info">
+                    <h2 class="meeting-title" id="meetingTitle">Переговорная свободна</h2>
+                    <div class="meeting-sub" id="meetingSub">
+                        <div class="meeting-sub-item" id="meetingTimeWrap" style="display: none;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            <span id="meetingTimeRange">--:-- — --:--</span>
+                        </div>
+                        <div class="meeting-sub-item" id="meetingOrganizerWrap" style="display: none;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            Организатор: <span class="meeting-sub-organizer" id="meetingOrganizer">--</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar-wrap" id="progressBarWrap" style="display: none;">
+                        <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <div class="next-meeting-strip" id="nextMeetingStrip" style="display: none;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <span id="nextMeetingText">Следующая встреча: ...</span>
+                </div>
+            </section>
+
+            <!-- Actions Card -->
+            <section class="actions-card" id="actionsCard">
+                <div class="actions-card__header">
+                    <span id="actionsHeaderTitle">Действия</span>
+                </div>
+                <div class="actions-card__row" id="actionsRow">
+                    <!-- Dynamic action buttons injected via JS -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Schedule Column (Right) -->
+        <aside class="schedule-column">
+            <div class="schedule-header">
+                <h3 class="schedule-title">Расписание на сегодня</h3>
+                <span class="schedule-count-pill" id="scheduleCount">0</span>
+            </div>
+            <div class="schedule-list" id="scheduleList">
+                <div class="schedule-empty">Загрузка встреч...</div>
+            </div>
+        </aside>
+    </main>
+</div>
+
+<!-- Modal: Early Finish Confirmation (Inside tablet only) -->
+<div class="modal-overlay" id="finishModal">
+    <div class="modal-dialog">
+        <h3 class="modal-title">Завершить встречу досрочно?</h3>
+        <p class="modal-desc">
+            Переговорная будет сразу освобождена и станет доступна для новых бронирований.
+        </p>
+        <div class="modal-actions">
+            <button class="btn-action btn-secondary" id="cancelFinishBtn">Отмена</button>
+            <button class="btn-action btn-danger" id="confirmFinishBtn">Завершить встречу</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Custom Quick Booking -->
+<div class="modal-overlay" id="customBookModal">
+    <div class="modal-dialog">
+        <h3 class="modal-title">Забронировать переговорную</h3>
+        <div class="modal-form-group">
+            <label class="modal-label" for="bookDurationSelect">Продолжительность</label>
+            <select class="modal-input" id="bookDurationSelect">
+                <option value="15">15 минут</option>
+                <option value="30" selected>30 минут</option>
+                <option value="45">45 минут</option>
+                <option value="60">1 час</option>
+            </select>
+        </div>
+        <div class="modal-form-group">
+            <label class="modal-label" for="bookTitleInput">Тема встречи</label>
+            <input class="modal-input" id="bookTitleInput" type="text" placeholder="Быстрая встреча" value="Быстрая встреча">
+        </div>
+        <div class="modal-form-group">
+            <label class="modal-label" for="bookOrganizerInput">Организатор</label>
+            <input class="modal-input" id="bookOrganizerInput" type="text" placeholder="Имя организатора">
+        </div>
+        <div class="modal-actions">
+            <button class="btn-action btn-secondary" id="cancelCustomBookBtn">Отмена</button>
+            <button class="btn-action btn-success" id="confirmCustomBookBtn">Занять</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+(function() {
+    // Parameters injected by Go server template
+    const ROOM_CODE = {{ .RoomCode }};
+    const ROOM_NAME = {{ .RoomName }};
+    const IS_INSIDE = {{ .IsInside }};
+    const LOCATION_MODE = {{ .Location }}; // "inside" or "outside"
+
+    // State
+    let currentData = null;
+    let remainingSeconds = 0;
+    let totalMeetingSeconds = 0;
+    let sseSource = null;
+    let reconnectTimeout = null;
+
+    // Elements
+    const bodyEl = document.body;
+    const digitalClockEl = document.getElementById('digitalClock');
+    const dateStringEl = document.getElementById('dateString');
+    const sseDotEl = document.getElementById('sseDot');
+    const sseStatusTextEl = document.getElementById('sseStatusText');
+    const fullscreenBtnEl = document.getElementById('fullscreenBtn');
+
+    const statusBadgeEl = document.getElementById('statusBadge');
+    const statusBadgeTextEl = document.getElementById('statusBadgeText');
+    const countdownLabelEl = document.getElementById('countdownLabel');
+    const countdownTimerEl = document.getElementById('countdownTimer');
+    const meetingTitleEl = document.getElementById('meetingTitle');
+    const meetingTimeWrapEl = document.getElementById('meetingTimeWrap');
+    const meetingTimeRangeEl = document.getElementById('meetingTimeRange');
+    const meetingOrganizerWrapEl = document.getElementById('meetingOrganizerWrap');
+    const meetingOrganizerEl = document.getElementById('meetingOrganizer');
+    const progressBarWrapEl = document.getElementById('progressBarWrap');
+    const progressBarFillEl = document.getElementById('progressBarFill');
+    const nextMeetingStripEl = document.getElementById('nextMeetingStrip');
+    const nextMeetingTextEl = document.getElementById('nextMeetingText');
+
+    const actionsHeaderTitleEl = document.getElementById('actionsHeaderTitle');
+    const actionsRowEl = document.getElementById('actionsRow');
+
+    const scheduleListEl = document.getElementById('scheduleList');
+    const scheduleCountEl = document.getElementById('scheduleCount');
+
+    const finishModalEl = document.getElementById('finishModal');
+    const cancelFinishBtnEl = document.getElementById('cancelFinishBtn');
+    const confirmFinishBtnEl = document.getElementById('confirmFinishBtn');
+
+    const customBookModalEl = document.getElementById('customBookModal');
+    const bookDurationSelectEl = document.getElementById('bookDurationSelect');
+    const bookTitleInputEl = document.getElementById('bookTitleInput');
+    const bookOrganizerInputEl = document.getElementById('bookOrganizerInput');
+    const cancelCustomBookBtnEl = document.getElementById('cancelCustomBookBtn');
+    const confirmCustomBookBtnEl = document.getElementById('confirmCustomBookBtn');
+
+    const toastContainerEl = document.getElementById('toastContainer');
+
+    // ------------------ Notification Toast ------------------
+    function showToast(text, type = 'info', duration = 3500) {
+        const toast = document.createElement('div');
+        toast.className = `toast toast--${type}`;
+        toast.textContent = text;
+        toastContainerEl.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+
+    // ------------------ Clock & Date ------------------
+    function updateClock() {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        digitalClockEl.textContent = `${hh}:${mm}:${ss}`;
+
+        const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+        dateStringEl.textContent = now.toLocaleDateString('ru-RU', options);
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // ------------------ Fullscreen Toggle ------------------
+    fullscreenBtnEl.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+            document.exitFullscreen().catch(() => {});
+        }
+    });
+
+    // ------------------ Time Formatting ------------------
+    function formatTime(isoStr) {
+        if (!isoStr) return '--:--';
+        const d = new Date(isoStr);
+        return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatSeconds(sec) {
+        if (sec <= 0) return '00:00';
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = sec % 60;
+        if (h > 0) {
+            return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    // ------------------ Fetch Data ------------------
+    async function fetchTabletInfo() {
+        try {
+            const resp = await fetch(`/api/rooms/tablet-info/${encodeURIComponent(ROOM_CODE)}/?_=${Date.now()}`, {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache, no-store' }
+            });
+            if (!resp.ok) {
+                throw new Error(`HTTP error ${resp.status}`);
+            }
+            const data = await resp.json();
+            renderTablet(data);
+        } catch (err) {
+            console.warn('[Tablet] Ошибка получения данных:', err);
+        }
+    }
+
+    // ------------------ Render ------------------
+    function renderTablet(data) {
+        currentData = data;
+        const isBusy = (data.status === 'busy' && !!data.current_meeting);
+        const cur = data.current_meeting;
+        const next = data.next_meeting;
+
+        bodyEl.setAttribute('data-status', isBusy ? 'busy' : 'free');
+
+        // Status Badge & Hero details
+        if (isBusy) {
+            statusBadgeEl.className = 'status-badge status-badge--busy';
+            statusBadgeTextEl.textContent = 'Занято';
+            countdownLabelEl.textContent = 'До окончания встречи';
+
+            const now = new Date();
+            const end = new Date(cur.end_time);
+            const start = new Date(cur.start_time);
+            remainingSeconds = Math.max(0, Math.floor((end - now) / 1000));
+            totalMeetingSeconds = Math.max(1, Math.floor((end - start) / 1000));
+
+            countdownTimerEl.textContent = formatSeconds(remainingSeconds);
+
+            // Progress bar
+            const elapsed = totalMeetingSeconds - remainingSeconds;
+            const pct = Math.min(100, Math.max(0, (elapsed / totalMeetingSeconds) * 100));
+            progressBarWrapEl.style.display = 'block';
+            progressBarFillEl.style.width = `${pct}%`;
+
+            // Meeting Details
+            meetingTitleEl.textContent = cur.title || 'Встреча без названия';
+            meetingTimeWrapEl.style.display = 'inline-flex';
+            meetingTimeRangeEl.textContent = `${formatTime(cur.start_time)} — ${formatTime(cur.end_time)}`;
+
+            if (cur.organizer) {
+                meetingOrganizerWrapEl.style.display = 'inline-flex';
+                meetingOrganizerEl.textContent = cur.organizer;
+            } else {
+                meetingOrganizerWrapEl.style.display = 'none';
+            }
+        } else {
+            remainingSeconds = 0;
+            totalMeetingSeconds = 0;
+            progressBarWrapEl.style.display = 'none';
+
+            if (next) {
+                const now = new Date();
+                const nextStart = new Date(next.start_time);
+                const freeSec = Math.max(0, Math.floor((nextStart - now) / 1000));
+                countdownTimerEl.textContent = formatSeconds(freeSec);
+                countdownLabelEl.textContent = `До начала встречи (${formatTime(next.start_time)})`;
+
+                statusBadgeEl.className = 'status-badge status-badge--free';
+                statusBadgeTextEl.textContent = `Свободно до ${formatTime(next.start_time)}`;
+
+                meetingTitleEl.textContent = `Следующая встреча: «${next.title || 'Встреча'}»`;
+                meetingTimeWrapEl.style.display = 'inline-flex';
+                meetingTimeRangeEl.textContent = `${formatTime(next.start_time)} — ${formatTime(next.end_time)}`;
+
+                if (next.organizer) {
+                    meetingOrganizerWrapEl.style.display = 'inline-flex';
+                    meetingOrganizerEl.textContent = next.organizer;
+                } else {
+                    meetingOrganizerWrapEl.style.display = 'none';
+                }
+            } else {
+                statusBadgeEl.className = 'status-badge status-badge--free';
+                statusBadgeTextEl.textContent = 'Свободно';
+                countdownLabelEl.textContent = 'Доступно для бронирования';
+                countdownTimerEl.textContent = 'Весь день';
+
+                meetingTitleEl.textContent = 'Переговорная свободна';
+                meetingTimeWrapEl.style.display = 'none';
+                meetingOrganizerWrapEl.style.display = 'none';
+            }
+        }
+
+        // Next Meeting Strip
+        if (isBusy && next) {
+            nextMeetingStripEl.style.display = 'flex';
+            nextMeetingTextEl.innerHTML = `Далее: <strong>${escapeHtml(next.title)}</strong> с ${formatTime(next.start_time)} (${escapeHtml(next.organizer || 'Без организатора')})`;
+        } else if (!isBusy && next) {
+            nextMeetingStripEl.style.display = 'flex';
+            nextMeetingTextEl.innerHTML = `Запланировано на сегодня: <strong>${escapeHtml(next.title)}</strong> с ${formatTime(next.start_time)} до ${formatTime(next.end_time)} (${escapeHtml(next.organizer || 'Без организатора')})`;
+        } else {
+            nextMeetingStripEl.style.display = 'none';
+        }
+
+        // Actions Rendering
+        renderActions(isBusy, cur, next);
+
+        // Schedule List
+        renderSchedule(data.today_bookings || [], cur);
+    }
+
+    // ------------------ Actions Render ------------------
+    function renderActions(isBusy, cur, next) {
+        actionsRowEl.innerHTML = '';
+
+        // OUTSIDE TABLET BEHAVIOR
+        if (!IS_INSIDE) {
+            if (isBusy) {
+                // Планшет снаружи при начале встречи и до её конца не имеет никакой функциональности кроме отображения что за встреча и сколько осталось до её конца
+                actionsHeaderTitleEl.textContent = 'Информация';
+                const notice = document.createElement('div');
+                notice.className = 'readonly-notice';
+                notice.innerHTML = `
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <span>Идёт встреча. Планшет снаружи переговорной работает в режиме отображения информации о текущей встрече.</span>
+                `;
+                actionsRowEl.appendChild(notice);
+            } else {
+                // Free outside tablet allows quick booking
+                actionsHeaderTitleEl.textContent = 'Быстро занять переговорную';
+                renderQuickBookButtons();
+            }
+            return;
+        }
+
+        // INSIDE TABLET BEHAVIOR
+        if (isBusy) {
+            actionsHeaderTitleEl.textContent = 'Управление текущей встречей';
+
+            // Extend buttons
+            const btnExt15 = createActionButton('+15 мин', 'btn-secondary', () => extendMeeting(15));
+            const btnExt30 = createActionButton('+30 мин', 'btn-secondary', () => extendMeeting(30));
+
+            // Finish early button
+            const btnFinish = createActionButton('Завершить встречу', 'btn-danger', () => {
+                finishModalEl.classList.add('active');
+            });
+
+            actionsRowEl.appendChild(btnExt15);
+            actionsRowEl.appendChild(btnExt30);
+            actionsRowEl.appendChild(btnFinish);
+        } else {
+            actionsHeaderTitleEl.textContent = 'Быстро занять переговорную';
+            renderQuickBookButtons();
+
+            const btnCustom = createActionButton('Запланировать...', 'btn-primary', () => {
+                bookOrganizerInputEl.value = 'Планшет внутри';
+                customBookModalEl.classList.add('active');
+            });
+            actionsRowEl.appendChild(btnCustom);
+        }
+    }
+
+    function renderQuickBookButtons() {
+        const durations = [15, 30, 45, 60];
+        durations.forEach(mins => {
+            const btn = createActionButton(`+${mins} мин`, 'btn-success', () => {
+                quickBook(mins, 'Быстрая встреча', IS_INSIDE ? 'Планшет внутри' : 'Планшет снаружи');
+            });
+            actionsRowEl.appendChild(btn);
+        });
+    }
+
+    function createActionButton(text, className, onClick) {
+        const btn = document.createElement('button');
+        btn.className = `btn-action ${className}`;
+        btn.textContent = text;
+        btn.addEventListener('click', onClick);
+        return btn;
+    }
+
+    // ------------------ Schedule Render ------------------
+    function renderSchedule(bookings, currentMeeting) {
+        scheduleCountEl.textContent = String(bookings.length);
+        scheduleListEl.innerHTML = '';
+
+        if (!bookings.length) {
+            scheduleListEl.innerHTML = '<div class="schedule-empty">На сегодня встреч не запланировано</div>';
+            return;
+        }
+
+        const now = new Date();
+
+        bookings.forEach(b => {
+            const start = new Date(b.start_time);
+            const end = new Date(b.end_time);
+
+            const isCurrent = currentMeeting && (currentMeeting.id === b.id);
+            const isPast = end <= now;
+
+            const item = document.createElement('div');
+            let itemClass = 'schedule-item';
+            if (isCurrent) itemClass += ' schedule-item--current';
+            else if (isPast) itemClass += ' schedule-item--past';
+            else itemClass += ' schedule-item--upcoming';
+            item.className = itemClass;
+
+            let tagHtml = '';
+            if (isCurrent) {
+                tagHtml = '<span class="schedule-item__tag">Сейчас</span>';
+            } else if (isPast) {
+                tagHtml = '<span class="schedule-item__tag schedule-item__tag--past">Завершено</span>';
+            } else {
+                tagHtml = '<span class="schedule-item__tag schedule-item__tag--upcoming">Запланировано</span>';
+            }
+
+            item.innerHTML = `
+                <div class="schedule-item__time-row">
+                    <span class="schedule-item__time">${formatTime(b.start_time)} — ${formatTime(b.end_time)}</span>
+                    ${tagHtml}
+                </div>
+                <div class="schedule-item__title" title="${escapeHtml(b.title)}">${escapeHtml(b.title)}</div>
+                <div class="schedule-item__organizer">${escapeHtml(b.organizer || 'Без организатора')}</div>
+            `;
+            scheduleListEl.appendChild(item);
+        });
+    }
+
+    // ------------------ API Actions ------------------
+    async function quickBook(durationMinutes, title, organizer) {
+        try {
+            const resp = await fetch('/api/rooms/quick-book/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    room_code: ROOM_CODE,
+                    duration_minutes: durationMinutes,
+                    title: title || 'Быстрая встреча',
+                    organizer: organizer || (IS_INSIDE ? 'Планшет внутри' : 'Планшет снаружи')
+                })
+            });
+
+            if (!resp.ok) {
+                const errText = await resp.text();
+                showToast(errText || 'Не удалось забронировать', 'error');
+                return;
+            }
+
+            showToast(`Переговорная успешно занята на ${durationMinutes} мин`, 'success');
+            await fetchTabletInfo();
+        } catch (err) {
+            showToast('Сетевая ошибка при бронировании', 'error');
+        }
+    }
+
+    async function extendMeeting(durationMinutes) {
+        if (!IS_INSIDE) {
+            showToast('Продление доступно только с планшета внутри', 'error');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/rooms/extend/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tablet-Location': 'inside'
+                },
+                body: JSON.stringify({
+                    room_code: ROOM_CODE,
+                    duration_minutes: durationMinutes,
+                    location: 'inside'
+                })
+            });
+
+            if (!resp.ok) {
+                const errText = await resp.text();
+                showToast(errText || 'Не удалось продлить встречу', 'error');
+                return;
+            }
+
+            const resJson = await resp.json();
+            showToast(resJson.message || `Встреча продлена на ${durationMinutes} мин`, 'success');
+            await fetchTabletInfo();
+        } catch (err) {
+            showToast('Сетевая ошибка при продлении', 'error');
+        }
+    }
+
+    async function finishMeetingEarly() {
+        if (!IS_INSIDE) {
+            showToast('Завершение доступно только с планшета внутри', 'error');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/rooms/finish-early/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    room_code: ROOM_CODE,
+                    location: 'inside'
+                })
+            });
+
+            if (!resp.ok) {
+                const errText = await resp.text();
+                showToast(errText || 'Не удалось завершить встречу', 'error');
+                return;
+            }
+
+            finishModalEl.classList.remove('active');
+            showToast('Встреча досрочно завершена', 'success');
+            await fetchTabletInfo();
+        } catch (err) {
+            showToast('Сетевая ошибка при завершении', 'error');
+        }
+    }
+
+    // Modal listeners
+    cancelFinishBtnEl.addEventListener('click', () => finishModalEl.classList.remove('active'));
+    confirmFinishBtnEl.addEventListener('click', finishMeetingEarly);
+
+    cancelCustomBookBtnEl.addEventListener('click', () => customBookModalEl.classList.remove('active'));
+    confirmCustomBookBtnEl.addEventListener('click', async () => {
+        const dur = parseInt(bookDurationSelectEl.value, 10) || 15;
+        const title = bookTitleInputEl.value.trim() || 'Быстрая встреча';
+        const organizer = bookOrganizerInputEl.value.trim() || (IS_INSIDE ? 'Планшет внутри' : 'Планшет снаружи');
+        customBookModalEl.classList.remove('active');
+        await quickBook(dur, title, organizer);
+    });
+
+    // ------------------ Second-by-Second Countdown Tick ------------------
+    setInterval(() => {
+        if (!currentData) return;
+
+        const isBusy = (currentData.status === 'busy' && !!currentData.current_meeting);
+
+        if (isBusy) {
+            if (remainingSeconds > 0) {
+                remainingSeconds--;
+                countdownTimerEl.textContent = formatSeconds(remainingSeconds);
+
+                if (totalMeetingSeconds > 0) {
+                    const elapsed = totalMeetingSeconds - remainingSeconds;
+                    const pct = Math.min(100, Math.max(0, (elapsed / totalMeetingSeconds) * 100));
+                    progressBarFillEl.style.width = `${pct}%`;
+                }
+            } else {
+                // Meeting just ended! Refresh instantly
+                fetchTabletInfo();
+            }
+        } else if (currentData.next_meeting) {
+            const now = new Date();
+            const nextStart = new Date(currentData.next_meeting.start_time);
+            const freeSec = Math.max(0, Math.floor((nextStart - now) / 1000));
+            countdownTimerEl.textContent = formatSeconds(freeSec);
+            if (freeSec <= 0) {
+                // Next meeting is starting right now!
+                fetchTabletInfo();
+            }
+        }
+    }, 1000);
+
+    // ------------------ Real-time SSE Sync ------------------
+    function initSSE() {
+        if (sseSource) {
+            sseSource.close();
+        }
+
+        try {
+            sseSource = new EventSource('/api/tasks/events/');
+
+            sseSource.onopen = () => {
+                sseDotEl.classList.remove('offline');
+                sseStatusTextEl.textContent = 'В сети';
+            };
+
+            sseSource.onerror = () => {
+                sseDotEl.classList.add('offline');
+                sseStatusTextEl.textContent = 'Переподключение...';
+                sseSource.close();
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = setTimeout(initSSE, 4000);
+            };
+
+            const handleUpdateEvent = (e) => {
+                try {
+                    const payload = JSON.parse(e.data);
+                    // If room_code matches or general refresh
+                    if (!payload.room_code || payload.room_code === ROOM_CODE) {
+                        fetchTabletInfo();
+                    }
+                } catch {
+                    fetchTabletInfo();
+                }
+            };
+
+            sseSource.addEventListener('room_booked', handleUpdateEvent);
+            sseSource.addEventListener('room_freed', handleUpdateEvent);
+            sseSource.addEventListener('meeting_extended', handleUpdateEvent);
+            sseSource.addEventListener('booking_cancelled', handleUpdateEvent);
+        } catch (e) {
+            console.warn('[SSE] Ошибка инициализации:', e);
+        }
+    }
+
+    // ------------------ Fallback Polling & Page Visibility ------------------
+    setInterval(fetchTabletInfo, 5000);
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            fetchTabletInfo();
+        }
+    });
+
+    // Utility escape HTML
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // Initial Load
+    fetchTabletInfo();
+    initSSE();
+})();
+</script>
+</body>
+</html>
