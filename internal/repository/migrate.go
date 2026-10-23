@@ -18,6 +18,7 @@ func Reset(db *gorm.DB) error {
 		&domain.Wall{},
 		&domain.Floor{},
 		&domain.Setting{},
+		&domain.RoomBooking{},
 	)
 	if err != nil {
 		return err
@@ -40,6 +41,7 @@ func Migrate(db *gorm.DB) error {
 		&domain.WorkSession{},
 		&domain.InventoryItem{},
 		&domain.Setting{},
+		&domain.RoomBooking{},
 	)
 	if err != nil {
 		return err
