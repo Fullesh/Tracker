@@ -116,3 +116,9 @@ type InventoryItem struct {
 	CreatedAt       time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt       time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
+
+type Setting struct {
+	Key       string    `gorm:"primaryKey;size:100" json:"key"`
+	Value     string    `gorm:"type:text" json:"value"`
+	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
