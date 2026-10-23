@@ -79,6 +79,39 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func deleteScreenshotFile(urlStr string) {
+	cleanURL := strings.TrimSpace(urlStr)
+	if cleanURL == "" {
+		return
+	}
+	filename := filepath.Base(cleanURL)
+	if filename == "" || filename == "." || filename == "/" || strings.Contains(filename, "..") {
+		return
+	}
+
+	uploadDir := filepath.Join("web", "static", "uploads", "tasks")
+	filePath := filepath.Join(uploadDir, filename)
+
+	if _, err := os.Stat(filePath); err == nil {
+		_ = os.Remove(filePath)
+	}
+}
+
+func parseScreenshotsList(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	var result []string
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
 func (h *Handler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	taskID, err := strconv.Atoi(idStr)
@@ -131,7 +164,33 @@ func (h *Handler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 		task.Creator = payload.Creator
 	}
 	task.Assignee = payload.Assignee
-	task.Screenshot = strings.TrimSpace(payload.Screenshot)
+
+	// Если задача закрывается (status == "closed"):
+	// автоматически удаляем все скриншоты с сервера и очищаем поле screenshot
+	if task.Status == "closed" {
+		oldScreenshots := parseScreenshotsList(task.Screenshot)
+		for _, url := range oldScreenshots {
+			deleteScreenshotFile(url)
+		}
+		newScreenshots := parseScreenshotsList(payload.Screenshot)
+		for _, url := range newScreenshots {
+			deleteScreenshotFile(url)
+		}
+		task.Screenshot = ""
+	} else {
+		// Если задача не закрыта, но пользователь удалил часть скриншотов
+		oldShots := parseScreenshotsList(task.Screenshot)
+		newShotsMap := make(map[string]bool)
+		for _, s := range parseScreenshotsList(payload.Screenshot) {
+			newShotsMap[s] = true
+		}
+		for _, old := range oldShots {
+			if !newShotsMap[old] {
+				deleteScreenshotFile(old)
+			}
+		}
+		task.Screenshot = strings.TrimSpace(payload.Screenshot)
+	}
 
 	if err := h.db.Save(&task).Error; err != nil {
 		http.Error(w, "Ошибка редактирования задачи: "+err.Error(), http.StatusInternalServerError)
@@ -156,6 +215,14 @@ func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Некорректный ID задачи", http.StatusBadRequest)
 		return
 	}
+
+	var task domain.Task
+	if err := h.db.First(&task, taskID).Error; err == nil {
+		for _, s := range parseScreenshotsList(task.Screenshot) {
+			deleteScreenshotFile(s)
+		}
+	}
+
 	if err := h.db.Delete(&domain.Task{}, taskID).Error; err != nil {
 		http.Error(w, "Ошибка удаления задачи: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -169,6 +236,42 @@ func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 	})
+}
+
+type deleteScreenshotPayload struct {
+	URL    string `json:"url"`
+	TaskID *uint  `json:"task_id"`
+}
+
+func (h *Handler) DeleteTaskScreenshot(w http.ResponseWriter, r *http.Request) {
+	var payload deleteScreenshotPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Некорректный JSON", http.StatusBadRequest)
+		return
+	}
+
+	deleteScreenshotFile(payload.URL)
+
+	if payload.TaskID != nil && *payload.TaskID > 0 {
+		var task domain.Task
+		if err := h.db.First(&task, *payload.TaskID).Error; err == nil {
+			shots := parseScreenshotsList(task.Screenshot)
+			var updated []string
+			for _, s := range shots {
+				if s != strings.TrimSpace(payload.URL) {
+					updated = append(updated, s)
+				}
+			}
+			task.Screenshot = strings.Join(updated, ",")
+			h.db.Save(&task)
+			if h.sse != nil {
+				h.sse.Broadcast("task_updated", task)
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true})
 }
 
 func (h *Handler) TaskEvents(w http.ResponseWriter, r *http.Request) {

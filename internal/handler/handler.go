@@ -56,6 +56,8 @@ func (h *Handler) InitRoutes() http.Handler {
 	mux.HandleFunc("GET /api/tasks/events", h.TaskEvents)
 	mux.HandleFunc("POST /api/tasks/upload-screenshot/{$}", h.UploadTaskScreenshot)
 	mux.HandleFunc("POST /api/tasks/upload-screenshot", h.UploadTaskScreenshot)
+	mux.HandleFunc("POST /api/tasks/delete-screenshot/{$}", h.DeleteTaskScreenshot)
+	mux.HandleFunc("POST /api/tasks/delete-screenshot", h.DeleteTaskScreenshot)
 
 	//REST WORKDAY
 	mux.HandleFunc("GET /api/workday/status/{$}", h.GetWorkdayStatus)
