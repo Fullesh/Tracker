@@ -40,14 +40,15 @@ func NewPingerService(db *gorm.DB) *PingerService {
 	}
 
 	interval := 10
-	var setting domain.Setting
-	if err := db.Where("key = ?", "pinger_interval").First(&setting).Error; err == nil {
-		if n, err := strconv.Atoi(setting.Value); err == nil && n >= 1 {
+	var intervalSetting domain.Setting
+	if err := db.Where("key = ?", "pinger_interval").First(&intervalSetting).Error; err == nil {
+		if n, err := strconv.Atoi(intervalSetting.Value); err == nil && n >= 1 {
 			interval = n
 		}
 	}
-	if err := db.Where("key = ?", "pinger_enabled").First(&setting).Error; err == nil {
-		enabled = setting.Value == "true" || setting.Value == "1"
+	var enabledSetting domain.Setting
+	if err := db.Where("key = ?", "pinger_enabled").First(&enabledSetting).Error; err == nil {
+		enabled = enabledSetting.Value == "true" || enabledSetting.Value == "1"
 	}
 	return &PingerService{
 		db:              db,
