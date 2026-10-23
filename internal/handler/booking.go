@@ -144,3 +144,57 @@ func (h *Handler) DeleteRoomBooking(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 	})
 }
+
+func (h *Handler) GetRoomTabletInfo(w http.ResponseWriter, r *http.Request) {
+	code := r.PathValue("code")
+	if code == "" {
+		http.Error(w, "Не указан код переговорной", http.StatusBadRequest)
+		return
+	}
+
+	roomName := code
+	var wp domain.Workplace
+	if err := h.db.Where("code = ?", code).First(&wp).Error; err == nil && wp.Room != "" {
+		roomName = wp.Room
+	}
+
+	now := time.Now()
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	dayEnd := dayStart.Add(24 * time.Hour)
+
+	var todayBookings []domain.RoomBooking
+	h.db.Where("room_code = ? AND start_time < ? AND end_time > ?", code, dayEnd, dayStart).
+		Order("start_time ASC").
+		Find(&todayBookings)
+
+	var currentMeeting *domain.RoomBooking
+	var nextMeeting *domain.RoomBooking
+
+	for i := range todayBookings {
+		b := &todayBookings[i]
+		if (b.StartTime.Before(now) || b.StartTime.Equal(now)) && b.EndTime.After(now) {
+			currentMeeting = b
+		} else if b.StartTime.After(now) && nextMeeting == nil {
+			nextMeeting = b
+		}
+	}
+
+	status := "free"
+	remainingSeconds := 0
+	if currentMeeting != nil {
+		status = "busy"
+		remainingSeconds = int(currentMeeting.EndTime.Sub(now).Seconds())
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"room_code":         code,
+		"room_name":         roomName,
+		"status":            status,
+		"current_meeting":   currentMeeting,
+		"next_meeting":      nextMeeting,
+		"today_bookings":    todayBookings,
+		"remaining_seconds": remainingSeconds,
+		"server_time":       now.Format(time.RFC3339),
+	})
+}
