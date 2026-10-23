@@ -1881,7 +1881,7 @@
             const isNew = !emp || !emp.id;
             const header = el('div', { class: 'modal__header' }, [
                 el('h2', { text: isNew ? 'Новый сотрудник' : `Редактирование: ${emp.full_name}` }),
-                el('button', { class: 'icon-btn', type: 'button', 'data-close': '', html: '&times;', onclick: () => isNew ? closeEmployeeModal() : openEmployeeModal(emp, false) })
+                el('button', { class: 'icon-btn', type: 'button', 'data-close': '', html: '&times;', onclick: closeEmployeeModal })
             ]);
 
             const errBanner = el('div', {
@@ -2048,8 +2048,8 @@
                 ]),
             ];
 
+            const userLogin = (emp.user && emp.user.username) || (state.auth && state.auth.username) || '';
             if (state.auth && state.auth.is_admin) {
-                const userLogin = (emp.user && emp.user.username) || '';
                 const passwordInput = el('input', {
                     class: 'input',
                     type: 'text',
@@ -2094,6 +2094,73 @@
                         ])
                     ])
                 ]));
+            } else if (state.auth && state.auth.is_authenticated) {
+                // Обычный сотрудник: логин менять нельзя, для смены пароля требуется старый пароль
+                const oldPassInput = el('input', {
+                    class: 'input',
+                    type: 'password',
+                    name: 'old_password',
+                    placeholder: 'Введите старый пароль',
+                    autocomplete: 'current-password'
+                });
+
+                const newPassInput = el('input', {
+                    class: 'input',
+                    type: 'password',
+                    name: 'new_password',
+                    placeholder: 'Введите новый пароль',
+                    autocomplete: 'new-password'
+                });
+
+                const confirmPassInput = el('input', {
+                    class: 'input',
+                    type: 'password',
+                    name: 'confirm_password',
+                    placeholder: 'Повторите новый пароль',
+                    autocomplete: 'new-password'
+                });
+
+                bodyFields.push(el('div', {
+                    class: 'emp-modal__auth-box'
+                }, [
+                    el('div', { class: 'emp-modal__auth-title' }, [
+                        document.createTextNode('Учётная запись и безопасность')
+                    ]),
+                    el('div', { class: 'field', style: 'margin-bottom: 12px;' }, [
+                        el('div', { class: 'field__label-row' }, [
+                            el('span', { class: 'field__label', text: 'Логин (username)' }),
+                            el('span', { style: 'font-size: 11px; color: var(--text-muted);', text: 'Логин изменить нельзя' })
+                        ]),
+                        el('input', {
+                            class: 'input',
+                            value: userLogin,
+                            disabled: true,
+                            readonly: true,
+                            style: 'background: var(--bg-page); cursor: not-allowed; opacity: 0.85;',
+                            title: 'Логин может изменить только администратор'
+                        })
+                    ]),
+                    el('div', { style: 'font-weight: 600; font-size: 13px; margin-bottom: 8px; color: var(--text-primary);' }, [
+                        document.createTextNode('Смена пароля')
+                    ]),
+                    el('div', { class: 'field', style: 'margin-bottom: 8px;' }, [
+                        el('span', { class: 'field__label', text: 'Старый пароль' }),
+                        oldPassInput
+                    ]),
+                    el('div', { class: 'grid-2' }, [
+                        el('div', { class: 'field' }, [
+                            el('span', { class: 'field__label', text: 'Новый пароль' }),
+                            newPassInput
+                        ]),
+                        el('div', { class: 'field' }, [
+                            el('span', { class: 'field__label', text: 'Подтвердите новый пароль' }),
+                            confirmPassInput
+                        ])
+                    ]),
+                    el('div', { style: 'font-size: 11px; color: var(--text-muted); margin-top: 4px;' }, [
+                        document.createTextNode('Оставьте поля паролей пустыми, если не хотите менять пароль.')
+                    ])
+                ]));
             }
 
             const body = el('div', { class: 'modal__body' }, bodyFields);
@@ -2101,7 +2168,7 @@
             const footer = el('div', { class: 'modal__footer' }, [
                 el('div', {}),
                 el('div', { class: 'modal__footer-right' }, [
-                    el('button', { class: 'btn btn--ghost', type: 'button', text: 'Отмена', onclick: () => isNew ? closeEmployeeModal() : openEmployeeModal(emp, false) }),
+                    el('button', { class: 'btn btn--ghost', type: 'button', text: 'Отмена', onclick: closeEmployeeModal }),
                     el('button', { class: 'btn btn--action', type: 'submit', id: 'empSaveBtn', text: isNew ? 'Создать сотрудника' : 'Сохранить изменения' }),
                 ])
             ]);
@@ -2114,6 +2181,39 @@
                 saveBtn.disabled = true;
                 saveBtn.textContent = 'Сохранение...';
                 errBanner.hidden = true;
+
+                if (!state.auth.is_admin) {
+                    const oldP = form.old_password ? form.old_password.value.trim() : '';
+                    const newP = form.new_password ? form.new_password.value : '';
+                    const confP = form.confirm_password ? form.confirm_password.value : '';
+
+                    if (newP || oldP || confP) {
+                        if (!oldP) {
+                            errBanner.textContent = 'Для смены пароля введите старый пароль';
+                            errBanner.hidden = false;
+                            saveBtn.disabled = false;
+                            saveBtn.textContent = 'Сохранить изменения';
+                            if (form.old_password) form.old_password.focus();
+                            return;
+                        }
+                        if (!newP) {
+                            errBanner.textContent = 'Введите новый пароль';
+                            errBanner.hidden = false;
+                            saveBtn.disabled = false;
+                            saveBtn.textContent = 'Сохранить изменения';
+                            if (form.new_password) form.new_password.focus();
+                            return;
+                        }
+                        if (newP !== confP) {
+                            errBanner.textContent = 'Новый пароль и подтверждение не совпадают';
+                            errBanner.hidden = false;
+                            saveBtn.disabled = false;
+                            saveBtn.textContent = 'Сохранить изменения';
+                            if (form.confirm_password) form.confirm_password.focus();
+                            return;
+                        }
+                    }
+                }
 
                 const formData = new FormData(form);
                 try {
@@ -2147,7 +2247,8 @@
                     }
                     populateCreatorList();
                     render();
-                    openEmployeeModal(updatedEmp, false);
+                    closeEmployeeModal();
+                    showToast(isNew ? 'Сотрудник успешно создан' : 'Изменения успешно сохранены');
                 } catch (err) {
                     errBanner.textContent = err.message;
                     errBanner.hidden = false;

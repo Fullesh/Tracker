@@ -166,8 +166,69 @@ func (h *Handler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 			emp.WorkplaceID = &id
 		}
 		h.saveUserCredentials(emp.ID, r.FormValue("username"), r.FormValue("password"))
-	} else if r.FormValue("password") != "" {
-		h.saveUserCredentials(emp.ID, "", r.FormValue("password"))
+	} else {
+		newPassword := r.FormValue("new_password")
+		if newPassword == "" {
+			newPassword = r.FormValue("password")
+		}
+		if newPassword != "" {
+			oldPassword := r.FormValue("old_password")
+			if oldPassword == "" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   "Для смены пароля необходимо указать старый пароль",
+				})
+				return
+			}
+
+			var user domain.User
+			err := h.db.Where("employee_id = ?", emp.ID).First(&user).Error
+			if err != nil && currentUserID != 0 {
+				err = h.db.First(&user, currentUserID).Error
+			}
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   "Учётная запись сотрудника не найдена",
+				})
+				return
+			}
+
+			if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword)); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   "Неверный старый пароль",
+				})
+				return
+			}
+
+			hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   "Ошибка хеширования нового пароля",
+				})
+				return
+			}
+			user.PasswordHash = string(hash)
+			if err := h.db.Save(&user).Error; err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   "Ошибка сохранения нового пароля: " + err.Error(),
+				})
+				return
+			}
+		}
 	}
 
 	if r.FormValue("delete_photo") == "true" {
