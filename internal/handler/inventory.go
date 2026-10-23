@@ -161,7 +161,7 @@ func (h *Handler) UpdateInventoryItem(w http.ResponseWriter, r *http.Request) {
 		item.InventoryNumber = payload.InventoryNumber
 	}
 
-	item.WorkplaceCode = payload.WorkplaceCode
+	item.WorkplaceCode = h.resolveWorkplaceCode(item.EmployeeID, item.WorkplaceCode)
 	item.EmployeeID = payload.EmployeeID
 	item.Notes = payload.Notes
 
@@ -169,6 +169,8 @@ func (h *Handler) UpdateInventoryItem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Ошибка обновления оборудования: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	h.db.Preload("Employee").First(&item, item.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
