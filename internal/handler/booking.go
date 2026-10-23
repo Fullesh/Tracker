@@ -29,6 +29,11 @@ type finishEarlyPayload struct {
 	RoomCode string `json:"room_code"`
 }
 
+type extendMeetingPayload struct {
+	RoomCode        string `json:"room_code"`
+	DurationMinutes int    `json:"duration_minutes"`
+}
+
 func (h *Handler) GetRoomBookings(w http.ResponseWriter, r *http.Request) {
 	dateStr := r.URL.Query().Get("date")
 	room := r.URL.Query().Get("room")
