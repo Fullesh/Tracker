@@ -1801,6 +1801,599 @@ select.input {
     min-width: 0;
 }
 
+/* ==========================================================================
+   Кнопка переключения темы (в правом нижнем углу) и плавные переходы
+   ========================================================================== */
+.btn--icon-only {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.theme-toggle-fab {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .14), 0 2px 6px rgba(0, 0, 0, .08);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    z-index: 950;
+    overflow: hidden;
+    transition: background-color .35s cubic-bezier(.4, 0, .2, 1),
+                border-color .35s cubic-bezier(.4, 0, .2, 1),
+                box-shadow .3s cubic-bezier(.4, 0, .2, 1),
+                transform .25s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+.theme-toggle-fab:hover {
+    transform: translateY(-2px) scale(1.06);
+    background: var(--bg-control);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .2), 0 4px 10px rgba(0, 0, 0, .1);
+}
+
+.theme-toggle-fab:active {
+    transform: translateY(0) scale(.94);
+}
+
+.theme-toggle-fab:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus), 0 6px 20px rgba(0, 0, 0, .18);
+}
+
+.theme-toggle-fab__icon {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+    transition: transform .52s cubic-bezier(.34, 1.56, .64, 1),
+                opacity .35s cubic-bezier(.4, 0, .2, 1),
+                color .35s ease;
+    will-change: transform, opacity;
+}
+
+/* В светлой теме видна луна, солнце скрыто с поворотом */
+.theme-toggle-fab .theme-icon-moon {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+    color: #3b4252;
+}
+.theme-toggle-fab .theme-icon-sun {
+    opacity: 0;
+    transform: rotate(90deg) scale(.35);
+    color: var(--ya-yellow);
+    pointer-events: none;
+}
+
+/* В тёмной теме видно солнце, луна уходит с поворотом */
+[data-theme="dark"] .theme-toggle-fab,
+.theme-dark .theme-toggle-fab {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .55), 0 0 16px rgba(255, 219, 77, .12);
+}
+[data-theme="dark"] .theme-toggle-fab:hover,
+.theme-dark .theme-toggle-fab:hover {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .65), 0 0 22px rgba(255, 219, 77, .24);
+}
+[data-theme="dark"] .theme-toggle-fab .theme-icon-moon,
+.theme-dark .theme-toggle-fab .theme-icon-moon {
+    opacity: 0;
+    transform: rotate(-90deg) scale(.35);
+    pointer-events: none;
+}
+[data-theme="dark"] .theme-toggle-fab .theme-icon-sun,
+.theme-dark .theme-toggle-fab .theme-icon-sun {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+    color: var(--ya-yellow);
+}
+
+/* Сдвигаем баннер cookie и toast левее плавающей кнопки темы */
+.cookie-banner {
+    right: 84px;
+}
+.toast {
+    right: 84px;
+}
+@media (max-width: 600px) {
+    .theme-toggle-fab {
+        right: 16px;
+        bottom: 16px;
+        width: 44px;
+        height: 44px;
+    }
+    .cookie-banner {
+        right: 12px;
+        bottom: 72px;
+    }
+    .toast {
+        right: 70px;
+        bottom: 18px;
+    }
+}
+
+/* Плавный переход всех элементов экрана при переключении темы */
+html.theme-transitioning,
+html.theme-transitioning body,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+    transition: background-color .42s cubic-bezier(.4, 0, .2, 1),
+                color .42s cubic-bezier(.4, 0, .2, 1),
+                border-color .42s cubic-bezier(.4, 0, .2, 1),
+                fill .42s cubic-bezier(.4, 0, .2, 1),
+                stroke .42s cubic-bezier(.4, 0, .2, 1),
+                box-shadow .42s cubic-bezier(.4, 0, .2, 1) !important;
+}
+
+/* Кастомный загрузчик файлов и фото */
+.custom-file-upload {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+.custom-file-upload__input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+.custom-file-upload__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.custom-file-upload__btn {
+    height: 36px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: var(--radius-s);
+    background: var(--bg-control);
+    color: var(--text-primary);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background .15s, border-color .15s;
+    user-select: none;
+}
+.custom-file-upload__btn:hover {
+    background: var(--bg-control-hover);
+    border-color: var(--text-tertiary);
+}
+.custom-file-upload__btn svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    opacity: .8;
+}
+.custom-file-upload__filename {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.custom-file-upload__filename--active {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+.custom-file-upload__reset {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ya-red);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: background .15s;
+}
+.custom-file-upload__reset:hover {
+    background: rgba(252, 63, 29, .1);
+}
+.custom-file-upload__preview-box {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px;
+    background: var(--bg-control);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    max-width: 100%;
+    align-self: flex-start;
+}
+.custom-file-upload__preview-img {
+    max-height: 96px;
+    max-width: 180px;
+    border-radius: 6px;
+    object-fit: contain;
+    display: block;
+}
+
+/* ==========================================================================
+   Тёмная тема (Dark Mode)
+   ========================================================================== */
+[data-theme="dark"],
+.theme-dark {
+    --text-primary: #eceef2;
+    --text-secondary: #9aa0ac;
+    --text-tertiary: #6d7380;
+    --bg-page: #121316;
+    --bg-surface: #1b1d22;
+    --bg-control: #252830;
+    --bg-control-hover: #2f333d;
+    --line: #2e323b;
+    --link: #4da3ff;
+    --focus: rgba(255, 219, 77, .45);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, .35), 0 4px 12px rgba(0, 0, 0, .25);
+    --shadow-hover: 0 6px 20px rgba(0, 0, 0, .45);
+    --shadow-modal: 0 20px 60px rgba(0, 0, 0, .65);
+    color-scheme: dark;
+}
+
+[data-theme="dark"] .person--active,
+.theme-dark .person--active {
+    background: rgba(255, 219, 77, .16);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .column--drop,
+.theme-dark .column--drop {
+    background: rgba(255, 219, 77, .12);
+    box-shadow: inset 0 0 0 2px var(--ya-yellow);
+}
+
+[data-theme="dark"] .btn--danger-ghost:hover,
+.theme-dark .btn--danger-ghost:hover {
+    background: rgba(252, 63, 29, .15);
+}
+
+/* Бейджи приоритетов и критичности в тёмной теме */
+[data-theme="dark"] .prio-critical,
+.theme-dark .prio-critical {
+    background: rgba(252, 63, 29, .2);
+    color: #ff8066;
+}
+[data-theme="dark"] .prio-high,
+.theme-dark .prio-high {
+    background: rgba(255, 184, 0, .18);
+    color: #ffc940;
+}
+[data-theme="dark"] .prio-normal,
+.theme-dark .prio-normal {
+    background: rgba(0, 119, 255, .2);
+    color: #66b2ff;
+}
+[data-theme="dark"] .prio-low,
+.theme-dark .prio-low {
+    background: #252830;
+    color: #9aa0ac;
+}
+
+[data-theme="dark"] .sev-s1,
+.theme-dark .sev-s1 {
+    background: #fc3f1d;
+    color: #fff;
+}
+[data-theme="dark"] .sev-s2,
+.theme-dark .sev-s2 {
+    background: rgba(139, 92, 246, .22);
+    color: #c4b5fd;
+}
+[data-theme="dark"] .sev-s3,
+.theme-dark .sev-s3 {
+    background: rgba(52, 168, 83, .2);
+    color: #6ee7b7;
+}
+[data-theme="dark"] .sev-s4,
+.theme-dark .sev-s4 {
+    background: #252830;
+    color: #9aa0ac;
+}
+
+[data-theme="dark"] .avatar--empty,
+.theme-dark .avatar--empty {
+    border-color: #3e434f;
+}
+
+/* Карта офиса (SVG) в тёмной теме */
+[data-theme="dark"] .wall-line,
+.theme-dark .wall-line {
+    stroke: #c8cdd6;
+}
+[data-theme="dark"] .room__rect,
+.theme-dark .room__rect {
+    fill: #20232a;
+    stroke: #383d48;
+}
+[data-theme="dark"] .room--server .room__rect,
+.theme-dark .room--server .room__rect {
+    fill: #1b222c;
+}
+[data-theme="dark"] .room__label,
+.theme-dark .room__label {
+    fill: #a5abb6;
+}
+[data-theme="dark"] .desk--selected .desk__body,
+.theme-dark .desk--selected .desk__body {
+    stroke: var(--ya-yellow) !important;
+}
+[data-theme="dark"] .desk__badge circle,
+.theme-dark .desk__badge circle {
+    stroke: #1b1d22;
+}
+
+[data-theme="dark"] .st-ok,
+.theme-dark .st-ok {
+    fill: #173323;
+    stroke: #34a853;
+    background: #173323;
+    border-color: #34a853;
+    color: #5ce080;
+}
+[data-theme="dark"] .st-s4,
+.theme-dark .st-s4 {
+    fill: #232730;
+    stroke: #6e788c;
+    background: #232730;
+    border-color: #6e788c;
+    color: #a5b0c4;
+}
+[data-theme="dark"] .st-s3,
+.theme-dark .st-s3 {
+    fill: #382d12;
+    stroke: #ffb800;
+    background: #382d12;
+    border-color: #ffb800;
+    color: #ffd15c;
+}
+[data-theme="dark"] .st-s2,
+.theme-dark .st-s2 {
+    fill: #3b2214;
+    stroke: #ff7a1a;
+    background: #3b2214;
+    border-color: #ff7a1a;
+    color: #ffa366;
+}
+[data-theme="dark"] .st-s1,
+.theme-dark .st-s1 {
+    fill: #3d1814;
+    stroke: #fc3f1d;
+    background: #3d1814;
+    border-color: #fc3f1d;
+    color: #ff8066;
+}
+
+[data-theme="dark"] .panel__ok,
+.theme-dark .panel__ok {
+    background: rgba(52, 168, 83, .16);
+    color: #6ee7b7;
+}
+
+/* Авторизация / User Pill */
+[data-theme="dark"] .user-pill__role,
+.theme-dark .user-pill__role {
+    background: #252830;
+    color: #b0b6c2;
+}
+[data-theme="dark"] .user-pill__role--admin,
+.theme-dark .user-pill__role--admin {
+    background: rgba(255, 219, 77, .18);
+    color: #ffdb4d;
+}
+
+/* Вкладка Сотрудники и модальное окно сотрудника */
+[data-theme="dark"] .emp-card:hover,
+.theme-dark .emp-card:hover {
+    border-color: #434957;
+}
+[data-theme="dark"] .emp-card__dept,
+[data-theme="dark"] .emp-modal-view__dept-tag,
+.theme-dark .emp-card__dept,
+.theme-dark .emp-modal-view__dept-tag {
+    background: var(--bg-control);
+    color: var(--text-secondary);
+}
+[data-theme="dark"] .emp-card__workplace--assigned,
+.theme-dark .emp-card__workplace--assigned {
+    background: rgba(0, 119, 255, .15);
+    color: #66b2ff;
+    border-color: rgba(0, 119, 255, .3);
+}
+[data-theme="dark"] .emp-card__workplace--unassigned,
+.theme-dark .emp-card__workplace--unassigned {
+    background: rgba(255, 153, 0, .12);
+    color: #ffb84d;
+    border-color: rgba(255, 153, 0, .3);
+}
+[data-theme="dark"] .emp-card__badge-edit,
+.theme-dark .emp-card__badge-edit {
+    color: #66b2ff;
+    background: rgba(0, 119, 255, .16);
+}
+[data-theme="dark"] .emp-modal__perm-banner--ok,
+.theme-dark .emp-modal__perm-banner--ok {
+    background: rgba(52, 168, 83, .14);
+    color: #6ee7b7;
+    border-color: rgba(52, 168, 83, .3);
+}
+[data-theme="dark"] .emp-modal__perm-banner--info,
+.theme-dark .emp-modal__perm-banner--info {
+    background: #23262e;
+    color: var(--text-secondary);
+    border-color: var(--line);
+}
+[data-theme="dark"] .emp-modal__perm-banner--error,
+.theme-dark .emp-modal__perm-banner--error {
+    background: rgba(252, 63, 29, .16);
+    color: #ff8066;
+    border-color: #fc3f1d;
+}
+[data-theme="dark"] .photo-uploader__preview,
+.theme-dark .photo-uploader__preview {
+    background: var(--bg-control);
+    color: var(--text-secondary);
+}
+[data-theme="dark"] .emp-modal__auth-box,
+.theme-dark .emp-modal__auth-box {
+    background: #16181d;
+    border-color: var(--line);
+}
+[data-theme="dark"] .btn-gen-pass,
+.theme-dark .btn-gen-pass {
+    border-color: var(--line);
+}
+
+/* Всплывающая карточка места на карте (Desk Hover Card) */
+[data-theme="dark"] .desk-hover-card,
+.theme-dark .desk-hover-card {
+    background: var(--bg-surface);
+    border-color: var(--line);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .35);
+}
+[data-theme="dark"] .desk-hover-card__left,
+.theme-dark .desk-hover-card__left {
+    background: #16181d;
+}
+[data-theme="dark"] .desk-hover-card__left--clickable:hover,
+.theme-dark .desk-hover-card__left--clickable:hover {
+    background: #1f222a;
+}
+[data-theme="dark"] .desk-hover-card__place-pill,
+.theme-dark .desk-hover-card__place-pill {
+    background: var(--bg-control);
+    color: var(--text-primary);
+}
+[data-theme="dark"] .desk-hover-card__contact,
+.theme-dark .desk-hover-card__contact {
+    color: var(--text-secondary);
+}
+[data-theme="dark"] .desk-hover-card__right,
+.theme-dark .desk-hover-card__right {
+    background: var(--bg-surface);
+}
+[data-theme="dark"] .desk-hover-card__task,
+.theme-dark .desk-hover-card__task {
+    background: #16181d;
+    border-color: var(--line);
+}
+[data-theme="dark"] .desk-hover-card__task:hover,
+.theme-dark .desk-hover-card__task:hover {
+    background: rgba(0, 194, 255, .1);
+    border-color: #00c2ff;
+}
+[data-theme="dark"] .desk-hover-card__task--closed,
+.theme-dark .desk-hover-card__task--closed {
+    background: #141519;
+}
+[data-theme="dark"] .desk-hover-card__count--active,
+.theme-dark .desk-hover-card__count--active {
+    background: rgba(252, 63, 29, .2);
+    color: #ff8066;
+}
+
+/* Cookie Banner, Workday Timer, My Tasks, Inventory Table */
+[data-theme="dark"] .cookie-banner,
+.theme-dark .cookie-banner {
+    background: rgba(27, 29, 34, .96);
+    border-color: var(--line);
+}
+[data-theme="dark"] .workday-timer,
+.theme-dark .workday-timer {
+    background: rgba(0, 119, 255, .18);
+    color: #66b2ff;
+}
+[data-theme="dark"] .workday-timer--paused,
+.theme-dark .workday-timer--paused {
+    background: rgba(255, 184, 0, .16);
+    color: #ffc940;
+}
+[data-theme="dark"] .my-task-card,
+.theme-dark .my-task-card {
+    background: var(--bg-surface);
+    border-color: var(--line);
+}
+[data-theme="dark"] .my-task-card__footer,
+.theme-dark .my-task-card__footer {
+    border-top-color: var(--line);
+}
+[data-theme="dark"] .my-task-card__status--open,
+.theme-dark .my-task-card__status--open { background: rgba(0, 119, 255, .2); color: #66b2ff; }
+[data-theme="dark"] .my-task-card__status--in_progress,
+.theme-dark .my-task-card__status--in_progress { background: rgba(255, 184, 0, .18); color: #ffc940; }
+[data-theme="dark"] .my-task-card__status--review,
+.theme-dark .my-task-card__status--review { background: rgba(139, 92, 246, .22); color: #c4b5fd; }
+[data-theme="dark"] .my-task-card__status--closed,
+.theme-dark .my-task-card__status--closed { background: rgba(52, 168, 83, .2); color: #6ee7b7; }
+
+[data-theme="dark"] .inventory-table th,
+.theme-dark .inventory-table th {
+    background: #16181d;
+    color: var(--text-secondary);
+}
+[data-theme="dark"] .inventory-table tbody tr:hover,
+.theme-dark .inventory-table tbody tr:hover {
+    background: #22252c;
+}
+[data-theme="dark"] .inventory-type-pill,
+.theme-dark .inventory-type-pill {
+    background: rgba(77, 163, 255, .15);
+    color: #7ab8ff;
+}
+[data-theme="dark"] .inv-status--assigned,
+.theme-dark .inv-status--assigned {
+    background: rgba(52, 168, 83, .2);
+    color: #6ee7b7;
+}
+[data-theme="dark"] .inv-status--storage,
+.theme-dark .inv-status--storage {
+    background: rgba(0, 119, 255, .2);
+    color: #66b2ff;
+}
+[data-theme="dark"] .inv-status--repair,
+.theme-dark .inv-status--repair {
+    background: rgba(255, 184, 0, .18);
+    color: #ffc940;
+}
+[data-theme="dark"] .inv-status--decommissioned,
+.theme-dark .inv-status--decommissioned {
+    background: #252830;
+    color: #8a909e;
+}
+[data-theme="dark"] .inventory-actions .btn--danger-ghost,
+.theme-dark .inventory-actions .btn--danger-ghost {
+    background: rgba(252, 63, 29, .14);
+}
+[data-theme="dark"] .inventory-actions .btn--danger-ghost:hover,
+.theme-dark .inventory-actions .btn--danger-ghost:hover {
+    background: rgba(252, 63, 29, .24);
+}
+
+
 
 
 

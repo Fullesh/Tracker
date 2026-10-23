@@ -383,10 +383,12 @@
 }
 
 .inspector__footer {
-    padding: 12px 16px;
+    padding: 12px 76px 12px 16px;
     border-top: 1px solid var(--line);
     display: flex;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    min-height: 64px;
+    align-items: center;
 }
 
 /* Формы инспектора */
@@ -698,5 +700,99 @@
         width: 250px;
     }
 }
+
+/* ==========================================================================
+   Тёмная тема для Конструктора карт (Dark Mode)
+   ========================================================================== */
+[data-theme="dark"] .canvas-wrap,
+.theme-dark .canvas-wrap {
+    background: #121316;
+}
+
+[data-theme="dark"] .editor-svg,
+.theme-dark .editor-svg {
+    background: #1b1d22;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] #grid-pattern-small circle,
+.theme-dark #grid-pattern-small circle {
+    fill: #2e323c !important;
+}
+
+[data-theme="dark"] #grid-pattern-large path,
+.theme-dark #grid-pattern-large path {
+    stroke: #343946 !important;
+}
+
+[data-theme="dark"] .wall-element,
+.theme-dark .wall-element {
+    stroke: #c8cdd6;
+}
+
+[data-theme="dark"] .label-element,
+.theme-dark .label-element {
+    fill: #a5abb6;
+}
+
+[data-theme="dark"] .desk-element .desk-rect,
+.theme-dark .desk-element .desk-rect {
+    fill: #252830;
+    stroke: #9aa0ac;
+}
+
+[data-theme="dark"] .desk-element--selected .desk-rect,
+.theme-dark .desk-element--selected .desk-rect {
+    fill: #382d12;
+    stroke: #ffdb4d !important;
+}
+
+[data-theme="dark"] .desk-element .desk-text-code,
+.theme-dark .desk-element .desk-text-code {
+    fill: #eceef2;
+}
+
+[data-theme="dark"] .desk-element .desk-text-name,
+.theme-dark .desk-element .desk-text-name {
+    fill: #9aa0ac;
+}
+
+[data-theme="dark"] .tool-btn--danger:hover,
+.theme-dark .tool-btn--danger:hover {
+    background: rgba(252, 63, 29, 0.18);
+    color: #ff8066;
+}
+
+[data-theme="dark"] .emp-autocomplete-list,
+.theme-dark .emp-autocomplete-list {
+    background: var(--bg-surface);
+    border-color: var(--line);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .emp-autocomplete-item,
+.theme-dark .emp-autocomplete-item {
+    border-bottom-color: var(--line);
+}
+
+[data-theme="dark"] .emp-autocomplete-item:hover,
+[data-theme="dark"] .emp-autocomplete-item--active,
+.theme-dark .emp-autocomplete-item:hover,
+.theme-dark .emp-autocomplete-item--active {
+    background: var(--bg-control);
+}
+
+[data-theme="dark"] .emp-autocomplete-name mark,
+.theme-dark .emp-autocomplete-name mark {
+    background: rgba(255, 219, 77, 0.35);
+    color: #fff;
+}
+
+[data-theme="dark"] .emp-autocomplete-badge,
+.theme-dark .emp-autocomplete-badge {
+    background: rgba(0, 119, 255, 0.2);
+    color: #66b2ff;
+}
+
 
 

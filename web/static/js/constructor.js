@@ -950,20 +950,54 @@
         }
     };
 
-    // Очистить этаж
-    document.getElementById('clearFloorBtn').onclick = () => {
-        const floor = getCurrentFloor();
-        if (!floor) return;
-        if (confirm(`Очистить все стены и объекты для «${floor.name}»?`)) {
+    // Очистить этаж через кастомное модальное окно
+    const clearFloorModal = document.getElementById('clearFloorModal');
+    const clearFloorModalMessage = document.getElementById('clearFloorModalMessage');
+    const confirmClearFloorBtn = document.getElementById('confirmClearFloorBtn');
+
+    function openClearFloorModal(floor) {
+        if (!clearFloorModal || !floor) return;
+        if (clearFloorModalMessage) {
+            clearFloorModalMessage.innerHTML = `Очистить все стены, надписи и рабочие места для этажа <strong>«${escapeHtml(floor.name)}»</strong>?`;
+        }
+        clearFloorModal.hidden = false;
+    }
+
+    function closeClearFloorModal() {
+        if (clearFloorModal) clearFloorModal.hidden = true;
+    }
+
+    if (clearFloorModal) {
+        clearFloorModal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', closeClearFloorModal);
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !clearFloorModal.hidden) {
+                closeClearFloorModal();
+            }
+        });
+    }
+
+    if (confirmClearFloorBtn) {
+        confirmClearFloorBtn.onclick = () => {
+            const floor = getCurrentFloor();
+            if (!floor) return;
             floor.walls = [];
             floor.labels = [];
             floor.workplaces = [];
             state.selectedItem = null;
             state.wallStart = null;
+            closeClearFloorModal();
             renderCanvas();
             renderInspector();
             showToast('План этажа очищен', 'success');
-        }
+        };
+    }
+
+    document.getElementById('clearFloorBtn').onclick = () => {
+        const floor = getCurrentFloor();
+        if (!floor) return;
+        openClearFloorModal(floor);
     };
 
     // Модальное окно подтверждения удаления этажа
@@ -1193,8 +1227,61 @@
         });
     }
 
+    // ---------- Переключатель темы (Dark / Light Mode) ----------
+    let themeTransitionTimer = null;
+    function initThemeToggle() {
+        const THEME_KEY = 'ptracker.theme';
+        const btn = document.getElementById('themeToggleBtn');
+        const root = document.documentElement;
+
+        function applyTheme(theme, animate = false) {
+            if (animate) {
+                root.classList.add('theme-transitioning');
+                if (themeTransitionTimer) clearTimeout(themeTransitionTimer);
+                themeTransitionTimer = setTimeout(() => {
+                    root.classList.remove('theme-transitioning');
+                }, 460);
+            }
+            if (theme === 'dark') {
+                root.setAttribute('data-theme', 'dark');
+                document.body.classList.add('theme-dark');
+            } else {
+                root.removeAttribute('data-theme');
+                document.body.classList.remove('theme-dark');
+            }
+            if (btn) {
+                const isDark = theme === 'dark';
+                btn.title = isDark ? 'Переключить на светлую тему' : 'Переключить на тёмную тему';
+                btn.setAttribute('aria-label', btn.title);
+            }
+        }
+
+        const saved = localStorage.getItem(THEME_KEY);
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initialTheme = saved ? saved : (prefersDark ? 'dark' : 'light');
+        applyTheme(initialTheme, false);
+
+        if (btn) {
+            btn.addEventListener('click', () => {
+                const current = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                const next = current === 'dark' ? 'light' : 'dark';
+                localStorage.setItem(THEME_KEY, next);
+                applyTheme(next, true);
+            });
+        }
+
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                if (!localStorage.getItem(THEME_KEY)) {
+                    applyTheme(e.matches ? 'dark' : 'light', true);
+                }
+            });
+        }
+    }
+
     // Инициализация
     editorSvg.classList.add('cursor-default');
+    initThemeToggle();
     initCookieBanner();
     renderFloorTabs();
     resetZoom();

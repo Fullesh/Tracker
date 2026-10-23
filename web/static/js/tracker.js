@@ -1146,27 +1146,72 @@
         render();
     });
 
-    deleteBtn.addEventListener('click', async () => {
-        const id = Number(form.id.value);
-        if (!id || !confirm(`Удалить задачу ${KEY_PREFIX}-${id}?`)) return;
-        try {
-            await fetch(`/api/tasks/${id}/delete/`, {
-                method: 'POST',
-                headers: { 'X-CSRFToken': getCsrfToken() },
-            });
-        } catch (err) {
-            console.error('Ошибка удаления задачи:', err);
+    // Модальное окно подтверждения удаления задачи
+    const deleteTaskModal = document.getElementById('deleteTaskModal');
+    const deleteTaskModalMessage = document.getElementById('deleteTaskModalMessage');
+    const confirmDeleteTaskBtn = document.getElementById('confirmDeleteTaskBtn');
+    let taskIdToDelete = null;
+
+    function openDeleteTaskModal(id) {
+        if (!deleteTaskModal || !id) return;
+        taskIdToDelete = id;
+        const taskObj = state.tasks.find((t) => Number(t.id) === Number(id));
+        const taskTitle = taskObj && taskObj.title ? ` «${escapeHtml(taskObj.title)}»` : '';
+        if (deleteTaskModalMessage) {
+            deleteTaskModalMessage.innerHTML = `Вы действительно хотите удалить задачу <strong>${KEY_PREFIX}-${id}</strong>${taskTitle}?`;
         }
-        state.tasks = state.tasks.filter((t) => t.id !== id);
-        saveTasks();
-        closeModal();
-        render();
+        deleteTaskModal.hidden = false;
+    }
+
+    function closeDeleteTaskModal() {
+        if (deleteTaskModal) deleteTaskModal.hidden = true;
+        taskIdToDelete = null;
+    }
+
+    if (deleteTaskModal) {
+        deleteTaskModal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', closeDeleteTaskModal);
+        });
+    }
+
+    if (confirmDeleteTaskBtn) {
+        confirmDeleteTaskBtn.addEventListener('click', async () => {
+            if (!taskIdToDelete) return;
+            const id = taskIdToDelete;
+            confirmDeleteTaskBtn.disabled = true;
+            try {
+                await fetch(`/api/tasks/${id}/delete/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrfToken() },
+                });
+            } catch (err) {
+                console.error('Ошибка удаления задачи:', err);
+            } finally {
+                confirmDeleteTaskBtn.disabled = false;
+            }
+            state.tasks = state.tasks.filter((t) => Number(t.id) !== Number(id));
+            saveTasks();
+            closeDeleteTaskModal();
+            closeModal();
+            render();
+            showToast(`Задача ${KEY_PREFIX}-${id} удалена`, 'success');
+        });
+    }
+
+    deleteBtn.addEventListener('click', () => {
+        const id = Number(form.id.value);
+        if (!id) return;
+        openDeleteTaskModal(id);
     });
 
     modal.querySelectorAll('[data-close]').forEach((n) => n.addEventListener('click', closeModal));
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             hideHoverCard();
+            if (deleteTaskModal && !deleteTaskModal.hidden) {
+                closeDeleteTaskModal();
+                return;
+            }
             if (!modal.hidden) closeModal();
         }
     });
@@ -1554,37 +1599,95 @@
                 hidden: true
             });
 
-            // Загрузка фото
-            let photoPreviewEl;
-            if (emp.photo_url) {
-                photoPreviewEl = el('img', { class: 'photo-uploader__preview', src: emp.photo_url });
-            } else {
-                photoPreviewEl = el('div', { class: 'photo-uploader__preview', text: emp.initials || '—' });
+            // Загрузка фото (кастомный контрол с превью, именем файла и кнопкой сброса)
+            const previewContainer = el('div', { class: 'photo-uploader__preview-wrap' });
+            function renderAvatarPreview(srcUrl) {
+                previewContainer.innerHTML = '';
+                if (srcUrl) {
+                    previewContainer.appendChild(el('img', { class: 'photo-uploader__preview', src: srcUrl, alt: emp.full_name || 'Фото' }));
+                } else {
+                    previewContainer.appendChild(el('div', { class: 'photo-uploader__preview', text: emp.initials || initials(emp.full_name || '') || '—' }));
+                }
             }
-            const photoInput = el('input', { type: 'file', name: 'photo', accept: 'image/*', class: 'input' });
-            photoInput.addEventListener('change', () => {
-                if (photoInput.files && photoInput.files[0]) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        photoPreviewEl.outerHTML = `<img class="photo-uploader__preview" src="${e.target.result}">`;
-                    };
-                    reader.readAsDataURL(photoInput.files[0]);
+            renderAvatarPreview(emp.photo_url || '');
+
+            const deletePhotoInput = el('input', { type: 'hidden', name: 'delete_photo', value: 'false' });
+            const photoInput = el('input', {
+                type: 'file',
+                name: 'photo',
+                accept: 'image/*',
+                class: 'custom-file-upload__input',
+                id: 'empPhotoFileInput'
+            });
+
+            const uploadSvgIcon = '<svg viewBox="0 0 24 24"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>';
+            const chooseBtn = el('label', {
+                class: 'custom-file-upload__btn',
+                for: 'empPhotoFileInput',
+                html: `${uploadSvgIcon}<span>Выбрать фото</span>`
+            });
+
+            const fileNameSpan = el('span', {
+                class: 'custom-file-upload__filename',
+                text: emp.photo_url ? 'Загружено текущее фото' : 'Файл не выбран'
+            });
+
+            const resetPhotoBtn = el('button', {
+                class: 'custom-file-upload__reset',
+                type: 'button',
+                hidden: !emp.photo_url,
+                text: emp.photo_url ? 'Удалить фото' : 'Сбросить',
+                onclick: () => {
+                    photoInput.value = '';
+                    if (emp.photo_url && deletePhotoInput.value === 'false') {
+                        deletePhotoInput.value = 'true';
+                        renderAvatarPreview('');
+                        fileNameSpan.textContent = 'Текущее фото будет удалено';
+                        fileNameSpan.classList.remove('custom-file-upload__filename--active');
+                        resetPhotoBtn.hidden = true;
+                    } else {
+                        deletePhotoInput.value = 'false';
+                        renderAvatarPreview(emp.photo_url || '');
+                        fileNameSpan.textContent = emp.photo_url ? 'Загружено текущее фото' : 'Файл не выбран';
+                        fileNameSpan.classList.remove('custom-file-upload__filename--active');
+                        resetPhotoBtn.textContent = 'Удалить фото';
+                        resetPhotoBtn.hidden = !emp.photo_url;
+                    }
                 }
             });
 
-            const photoControls = [photoInput];
-            if (emp.photo_url) {
-                photoControls.push(el('label', { style: 'font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;' }, [
-                    el('input', { type: 'checkbox', name: 'delete_photo', value: 'true' }),
-                    el('span', { text: 'Удалить текущее фото' })
-                ]));
-            }
+            photoInput.addEventListener('change', () => {
+                if (photoInput.files && photoInput.files[0]) {
+                    const file = photoInput.files[0];
+                    deletePhotoInput.value = 'false';
+                    fileNameSpan.textContent = file.name;
+                    fileNameSpan.classList.add('custom-file-upload__filename--active');
+                    resetPhotoBtn.textContent = 'Сбросить';
+                    resetPhotoBtn.hidden = false;
+
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        renderAvatarPreview(e.target.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            const customUploader = el('div', { class: 'custom-file-upload' }, [
+                photoInput,
+                deletePhotoInput,
+                el('div', { class: 'custom-file-upload__row' }, [
+                    chooseBtn,
+                    fileNameSpan,
+                    resetPhotoBtn
+                ])
+            ]);
 
             const photoBlock = el('div', { class: 'photo-uploader' }, [
-                photoPreviewEl,
+                previewContainer,
                 el('div', { class: 'photo-uploader__controls' }, [
                     el('span', { class: 'field__label', text: 'Фотография сотрудника' }),
-                    ...photoControls
+                    customUploader
                 ])
             ]);
 
@@ -2980,6 +3083,59 @@
         window.print();
     }
 
+    // ---------- Переключатель темы (Dark / Light Mode) ----------
+    let themeTransitionTimer = null;
+    function initThemeToggle() {
+        const THEME_KEY = 'ptracker.theme';
+        const btn = document.getElementById('themeToggleBtn');
+        const root = document.documentElement;
+
+        function applyTheme(theme, animate = false) {
+            if (animate) {
+                root.classList.add('theme-transitioning');
+                if (themeTransitionTimer) clearTimeout(themeTransitionTimer);
+                themeTransitionTimer = setTimeout(() => {
+                    root.classList.remove('theme-transitioning');
+                }, 460);
+            }
+            if (theme === 'dark') {
+                root.setAttribute('data-theme', 'dark');
+                document.body.classList.add('theme-dark');
+            } else {
+                root.removeAttribute('data-theme');
+                document.body.classList.remove('theme-dark');
+            }
+            if (btn) {
+                const isDark = theme === 'dark';
+                btn.title = isDark ? 'Переключить на светлую тему' : 'Переключить на тёмную тему';
+                btn.setAttribute('aria-label', btn.title);
+            }
+        }
+
+        const saved = localStorage.getItem(THEME_KEY);
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initialTheme = saved ? saved : (prefersDark ? 'dark' : 'light');
+        applyTheme(initialTheme, false);
+
+        if (btn) {
+            btn.addEventListener('click', () => {
+                const current = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                const next = current === 'dark' ? 'light' : 'dark';
+                localStorage.setItem(THEME_KEY, next);
+                applyTheme(next, true);
+            });
+        }
+
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                if (!localStorage.getItem(THEME_KEY)) {
+                    applyTheme(e.matches ? 'dark' : 'light', true);
+                }
+            });
+        }
+    }
+
+    initThemeToggle();
     initCookieBanner();
     if (state.auth && (state.auth.is_admin || state.auth.is_mto)) {
         loadInventory();
