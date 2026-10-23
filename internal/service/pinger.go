@@ -106,7 +106,7 @@ func (p *PingerService) CheckAll() {
 	var targets []target
 
 	var items []domain.InventoryItem
-	p.db.Where("ip IS NOT NULL AND ip != '' AND status != 'decomissioned'").Find(&items)
+	p.db.Where("ip IS NOT NULL AND ip != '' AND status != 'decommissioned'").Find(&items)
 	for _, it := range items {
 		targets = append(targets, target{
 			ip:     it.IP,
@@ -137,7 +137,7 @@ func (p *PingerService) CheckAll() {
 			continue
 		}
 		online := p.PingIP(t.ip)
-		newStatuses[t.name] = DeviceStatus{
+		newStatuses[t.ip] = DeviceStatus{
 			IP:            t.ip,
 			Name:          t.name,
 			Workplace:     t.wpCode,
