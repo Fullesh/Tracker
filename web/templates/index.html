@@ -539,6 +539,115 @@
     </div>
 </div>
 
+<!-- Модальное окно оборудования стойки -->
+<div class="modal" id="rackDeviceModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--small">
+        <form id="rackDeviceForm" novalidate>
+            <input type="hidden" name="id" id="rackDeviceIdInput">
+            <input type="hidden" name="workplace_code" id="rackDeviceWorkplaceCodeInput">
+            <div class="modal__header">
+                <h2 id="rackDeviceModalTitle">Оборудование в стойке</h2>
+                <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="modal__body modal__body--form">
+                <div class="field" style="margin-bottom: 12px;">
+                    <span class="field__label">Стойка размещения</span>
+                    <div id="rackDeviceWorkplaceDisplay" style="font-weight: 600; font-size: 13.5px; color: var(--accent);">SRV-01</div>
+                </div>
+
+                <label class="field">
+                    <span class="field__label">Наименование устройства *</span>
+                    <input class="input" name="name" id="rackDeviceNameInput" placeholder="Например: Коммутатор Cisco Catalyst 2960-X" required>
+                </label>
+
+                <div class="form-row">
+                    <label class="field">
+                        <span class="field__label">Тип устройства</span>
+                        <select class="input" name="device_type" id="rackDeviceTypeSelect">
+                            <option value="Коммутатор">Коммутатор (Switch)</option>
+                            <option value="Маршрутизатор">Маршрутизатор (Router)</option>
+                            <option value="Сервер">Сервер (Server Unit)</option>
+                            <option value="ИБП">ИБП (UPS)</option>
+                            <option value="Патч-панель">Патч-панель (Patch Panel)</option>
+                            <option value="Другое">Другое устройство</option>
+                        </select>
+                    </label>
+
+                    <label class="field">
+                        <span class="field__label">IP-адрес (для мониторинга)</span>
+                        <input class="input" name="ip" id="rackDeviceIpInput" placeholder="192.168.1.10">
+                    </label>
+                </div>
+
+                <div class="form-row">
+                    <label class="field">
+                        <span class="field__label">Инвентарный номер</span>
+                        <input class="input" name="inventory_number" id="rackDeviceNumberInput" placeholder="Оставьте пустым для автогенерации">
+                    </label>
+
+                    <label class="field">
+                        <span class="field__label">Юнит / Место в стойке</span>
+                        <input class="input" name="unit_slot" id="rackDeviceUnitInput" placeholder="Например: U12-U14">
+                    </label>
+                </div>
+
+                <label class="field">
+                    <span class="field__label">Характеристики и примечания</span>
+                    <textarea class="input input--textarea" name="notes" id="rackDeviceNotesInput" rows="2" placeholder="Характеристики портов, назначение, VLAN"></textarea>
+                </label>
+            </div>
+            <div class="modal__footer">
+                <div class="modal__footer-left">
+                    <button class="btn btn--danger-ghost" type="button" id="deleteRackDeviceBtn" hidden>Удалить из стойки</button>
+                </div>
+                <div class="modal__footer-right">
+                    <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                    <button class="btn btn--action" type="submit" id="saveRackDeviceBtn">Сохранить</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно настройки сетевого принтера -->
+<div class="modal" id="printerSettingsModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--small">
+        <form id="printerSettingsForm" novalidate>
+            <input type="hidden" name="workplace_id" id="printerWorkplaceIdInput">
+            <input type="hidden" name="workplace_code" id="printerWorkplaceCodeInput">
+            <div class="modal__header">
+                <h2>Настройки сетевого принтера</h2>
+                <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="modal__body modal__body--form">
+                <div class="field" style="margin-bottom: 12px;">
+                    <span class="field__label">Локация принтера</span>
+                    <div id="printerLocationDisplay" style="font-weight: 600; font-size: 13.5px; color: var(--accent);">1-PRN (Коридор)</div>
+                </div>
+
+                <label class="field">
+                    <span class="field__label">Сетевой IP-адрес принтера *</span>
+                    <input class="input" name="ip" id="printerIpInput" placeholder="Например: 192.168.10.25" required>
+                    <span class="field__hint">По этому адресу Pinger выполняет автоматический мониторинг доступности печати.</span>
+                </label>
+
+                <label class="field">
+                    <span class="field__label">Название / Модель принтера</span>
+                    <input class="input" name="name" id="printerNameInput" placeholder="Например: Сетевое МФУ Kyocera ECOSYS">
+                </label>
+            </div>
+            <div class="modal__footer">
+                <div class="modal__footer-right">
+                    <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                    <button class="btn btn--action" type="submit" id="savePrinterSettingsBtn">Сохранить</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Предупреждение о сборе Cookie -->
 <aside class="cookie-banner" id="cookieBanner" hidden aria-live="polite">
     <div class="cookie-banner__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1zm-2 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm-3 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm7 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z"/></svg></div>

@@ -1030,9 +1030,9 @@
                     el('button', {
                         class: 'btn btn--ghost btn--icon-sm',
                         type: 'button',
-                        text: '+ Добавить',
+                        text: '+ Добавить в стойку',
                         onclick: () => {
-                            openInventoryModal({ workplace_code: wp.code || wp.id, category: 'Сетевое оборудование' });
+                            openRackDeviceModal(null, wp);
                         }
                     })
                 ])
@@ -1044,16 +1044,21 @@
                 const list = el('div', { class: 'rack-block__list' });
                 rackEquip.forEach((eq) => {
                     const devStatus = getPingerDeviceStatus(eq.ip);
+                    const isChecked = isPingerDeviceChecked(devStatus);
+                    const isOnline = isPingerDeviceOnline(devStatus);
+                    const indCls = isChecked ? (isOnline ? '' : 'pinger-indicator--alert') : 'pinger-indicator--off';
+                    const indTitle = isChecked ? (isOnline ? 'Доступен по сети' : 'Недоступен!') : 'Не проверялся';
                     list.append(el('div', {
                         class: 'rack-item',
-                        onclick: () => openInventoryViewModal(eq)
+                        style: 'cursor: pointer;',
+                        onclick: () => openRackDeviceModal(eq, wp)
                     }, [
                         el('div', { class: 'rack-item__main' }, [
                             el('div', { class: 'rack-item__name' }, [
                                 eq.ip ? el('span', {
-                                    class: `pinger-indicator ${devStatus ? (devStatus.online ? '' : 'pinger-indicator--alert') : 'pinger-indicator--off'}`,
+                                    class: `pinger-indicator ${indCls}`,
                                     style: 'display:inline-block; margin-right: 6px;',
-                                    title: devStatus ? (devStatus.online ? 'Доступен по сети' : 'Недоступен!') : 'Статус неизвестен'
+                                    title: indTitle
                                 }) : null,
                                 el('span', { text: eq.name })
                             ]),
@@ -1066,10 +1071,10 @@
                             class: 'btn btn--ghost btn--icon-sm',
                             type: 'button',
                             text: '✎',
-                            title: 'Редактировать',
+                            title: 'Редактировать в стойке',
                             onclick: (e) => {
                                 e.stopPropagation();
-                                openInventoryModal(eq);
+                                openRackDeviceModal(eq, wp);
                             }
                         })
                     ]));
@@ -1079,47 +1084,58 @@
             panelEl.append(rackBlock);
         } else if (wp.kind === 'printer') {
             const printerEquip = (state.inventory || []).filter((it) => it.workplace_code === wp.id || it.workplace_code === (wp.code || wp.id));
-            if (printerEquip.length > 0) {
-                const pBlock = el('div', { class: 'rack-block' }, [
-                    el('div', { class: 'rack-block__head' }, [
-                        el('h4', { class: 'rack-block__title', text: 'Связанное оборудование' })
-                    ])
-                ]);
-                const pList = el('div', { class: 'rack-block__list' });
-                printerEquip.forEach((pr) => {
-                    const devStatus = getPingerDeviceStatus(pr.ip);
-                    pList.append(el('div', {
+            const printerItem = printerEquip[0] || null;
+            const currentIp = (printerItem && printerItem.ip) || wp.ip || '';
+            const devStatus = getPingerDeviceStatus(currentIp);
+            const isPrChecked = isPingerDeviceChecked(devStatus);
+            const isPrOnline = isPingerDeviceOnline(devStatus);
+            const prIndCls = isPrChecked ? (isPrOnline ? '' : 'pinger-indicator--alert') : 'pinger-indicator--off';
+            const prIndTitle = isPrChecked ? (isPrOnline ? 'Принтер в сети' : 'Принтер недоступен!') : 'Не проверялся';
+
+            const pBlock = el('div', { class: 'rack-block' }, [
+                el('div', { class: 'rack-block__head' }, [
+                    el('h4', { class: 'rack-block__title', text: 'Сетевой принтер' }),
+                    el('button', {
+                        class: 'btn btn--ghost btn--icon-sm',
+                        type: 'button',
+                        text: currentIp ? 'Настроить IP' : '+ Указать IP',
+                        onclick: () => openPrinterSettingsModal(wp, printerItem)
+                    })
+                ]),
+                el('div', { class: 'rack-block__list' }, [
+                    el('div', {
                         class: 'rack-item',
-                        onclick: () => openInventoryViewModal(pr)
+                        style: 'cursor: pointer;',
+                        onclick: () => openPrinterSettingsModal(wp, printerItem)
                     }, [
                         el('div', { class: 'rack-item__main' }, [
                             el('div', { class: 'rack-item__name' }, [
-                                pr.ip ? el('span', {
-                                    class: `pinger-indicator ${devStatus ? (devStatus.online ? '' : 'pinger-indicator--alert') : 'pinger-indicator--off'}`,
+                                currentIp ? el('span', {
+                                    class: `pinger-indicator ${prIndCls}`,
                                     style: 'display:inline-block; margin-right: 6px;',
-                                    title: devStatus ? (devStatus.online ? 'Доступен по сети' : 'Недоступен!') : 'Статус неизвестен'
+                                    title: prIndTitle
                                 }) : null,
-                                el('span', { text: pr.name })
+                                el('span', { text: (printerItem && printerItem.name) || wp.label || 'Сетевое МФУ' })
                             ]),
                             el('div', { class: 'rack-item__meta' }, [
-                                el('span', { text: `${pr.inventory_number || ''}` }),
-                                pr.ip ? el('span', { class: 'rack-item__ip', text: ` · ${pr.ip}` }) : null
+                                el('span', { text: currentIp ? `IP: ${currentIp}` : 'IP-адрес не задан (мониторинг отключен)' }),
+                                (printerItem && printerItem.inventory_number) ? el('span', { text: ` · ${printerItem.inventory_number}` }) : null
                             ])
                         ]),
                         el('button', {
                             class: 'btn btn--ghost btn--icon-sm',
                             type: 'button',
                             text: '✎',
+                            title: 'Настроить сетевые параметры',
                             onclick: (e) => {
                                 e.stopPropagation();
-                                openInventoryModal(pr);
+                                openPrinterSettingsModal(wp, printerItem);
                             }
                         })
-                    ]));
-                });
-                pBlock.append(pList);
-                panelEl.append(pBlock);
-            }
+                    ])
+                ])
+            ]);
+            panelEl.append(pBlock);
         }
 
         panelEl.append(el('div', { class: 'panel__section-title', text: `Открытые задачи · ${open.length}` }));
@@ -3663,9 +3679,25 @@
     // ---------- Pinger сетевой мониторинг ----------
     let pingerData = { enabled: false, interval_minutes: 10, devices: [] };
 
+    function isPingerDeviceOnline(d) {
+        if (!d) return false;
+        return Boolean(d.is_online !== undefined ? d.is_online : d.online);
+    }
+
+    function getPingerDeviceLastCheck(d) {
+        if (!d) return '';
+        return d.last_checked_at || d.last_check || '';
+    }
+
+    function isPingerDeviceChecked(d) {
+        const ts = getPingerDeviceLastCheck(d);
+        return Boolean(ts && !ts.startsWith('0001'));
+    }
+
     function getPingerDeviceStatus(ip) {
         if (!ip || !pingerData || !pingerData.devices) return null;
-        return pingerData.devices.find((d) => d.ip === ip) || null;
+        const cleanIp = String(ip).trim();
+        return pingerData.devices.find((d) => String(d.ip).trim() === cleanIp) || null;
     }
 
     async function loadPingerStatus() {
@@ -3685,7 +3717,7 @@
         const listEl = document.getElementById('pingerDevicesList');
 
         const devices = pingerData.devices || [];
-        const hasOffline = devices.some((d) => d.checked && !d.online);
+        const hasOffline = devices.some((d) => isPingerDeviceChecked(d) && !isPingerDeviceOnline(d));
 
         if (ind) {
             ind.className = 'pinger-indicator';
@@ -3708,16 +3740,18 @@
                 listEl.append(el('div', { class: 'panel__empty', text: 'Нет оборудования с указанным IP-адресом' }));
             } else {
                 devices.forEach((d) => {
-                    const isOnline = d.online;
-                    const tagCls = d.checked ? (isOnline ? 'pinger-status-tag--online' : 'pinger-status-tag--offline') : '';
-                    const tagText = d.checked ? (isOnline ? 'В сети' : 'Недоступен') : 'Не проверялся';
-                    const lastCheck = d.last_check ? new Date(d.last_check).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+                    const isOnline = isPingerDeviceOnline(d);
+                    const checked = isPingerDeviceChecked(d);
+                    const tagCls = checked ? (isOnline ? 'pinger-status-tag--online' : 'pinger-status-tag--offline') : '';
+                    const tagText = checked ? (isOnline ? 'В сети' : 'Недоступен') : 'Не проверялся';
+                    const ts = getPingerDeviceLastCheck(d);
+                    const lastCheck = checked ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
 
                     listEl.append(el('div', { class: 'pinger-device-item' }, [
                         el('div', { class: 'pinger-device-info' }, [
                             el('div', { class: 'pinger-device-name', text: d.name || 'Оборудование' }),
                             el('div', { class: 'pinger-device-sub' }, [
-                                el('span', { text: `${d.kind || 'device'} · ${d.workplace_code || 'Склад'} · ` }),
+                                el('span', { text: `${d.workplace || d.workplace_code || 'Склад'} · ` }),
                                 el('span', { class: 'pinger-device-ip', text: d.ip })
                             ])
                         ]),
@@ -3782,21 +3816,318 @@
 
         if (pingerCheckNowBtn) {
             pingerCheckNowBtn.addEventListener('click', async () => {
+                const origHtml = pingerCheckNowBtn.innerHTML;
                 pingerCheckNowBtn.disabled = true;
+                pingerCheckNowBtn.innerHTML = '<span>Опрашиваем...</span>';
                 try {
                     const resp = await fetch('/api/pinger/check-now/', { method: 'POST' });
                     if (!resp.ok) {
                         showToast('Ошибка запуска проверки', 'error');
                         pingerCheckNowBtn.disabled = false;
+                        pingerCheckNowBtn.innerHTML = origHtml;
                         return;
                     }
                     showToast('Опрос оборудования запущен...', 'info');
+
                     setTimeout(async () => {
                         await loadPingerStatus();
+                        render();
+                        const devs = pingerData.devices || [];
+                        const checkedDevs = devs.filter((d) => isPingerDeviceChecked(d));
+                        const onlineCount = checkedDevs.filter((d) => isPingerDeviceOnline(d)).length;
+                        const offlineCount = checkedDevs.filter((d) => !isPingerDeviceOnline(d)).length;
+
+                        if (checkedDevs.length > 0) {
+                            if (offlineCount > 0) {
+                                showToast(`Опрос завершен: ${onlineCount} в сети, ${offlineCount} недоступно`, 'error');
+                            } else {
+                                showToast(`Опрос завершен: все устройства (${onlineCount}) в сети`, 'success');
+                            }
+                        } else {
+                            showToast('Опрос завершен', 'success');
+                        }
+
                         pingerCheckNowBtn.disabled = false;
-                    }, 2500);
+                        pingerCheckNowBtn.innerHTML = origHtml;
+                    }, 2600);
                 } catch (err) {
                     pingerCheckNowBtn.disabled = false;
+                    pingerCheckNowBtn.innerHTML = origHtml;
+                    showToast('Ошибка: ' + err.message, 'error');
+                }
+            });
+        }
+    }
+
+    // ---------- Модальные окна оборудования стойки и сетевого принтера ----------
+    let currentRackItem = null;
+    let currentRackWp = null;
+
+    function openRackDeviceModal(item = null, wp = null) {
+        const rackDeviceModal = document.getElementById('rackDeviceModal');
+        const rackDeviceForm = document.getElementById('rackDeviceForm');
+        const rackDeviceIdInput = document.getElementById('rackDeviceIdInput');
+        const rackDeviceWorkplaceCodeInput = document.getElementById('rackDeviceWorkplaceCodeInput');
+        const rackDeviceWorkplaceDisplay = document.getElementById('rackDeviceWorkplaceDisplay');
+        const rackDeviceNameInput = document.getElementById('rackDeviceNameInput');
+        const rackDeviceTypeSelect = document.getElementById('rackDeviceTypeSelect');
+        const rackDeviceIpInput = document.getElementById('rackDeviceIpInput');
+        const rackDeviceNumberInput = document.getElementById('rackDeviceNumberInput');
+        const rackDeviceUnitInput = document.getElementById('rackDeviceUnitInput');
+        const rackDeviceNotesInput = document.getElementById('rackDeviceNotesInput');
+        const rackDeviceModalTitle = document.getElementById('rackDeviceModalTitle');
+        const deleteRackDeviceBtn = document.getElementById('deleteRackDeviceBtn');
+        const saveRackDeviceBtn = document.getElementById('saveRackDeviceBtn');
+
+        if (!rackDeviceModal || !rackDeviceForm) return;
+        currentRackItem = item;
+        currentRackWp = wp;
+        rackDeviceForm.reset();
+
+        const wpCode = (item && item.workplace_code) || (wp && (wp.code || wp.id)) || 'SRV';
+        rackDeviceWorkplaceCodeInput.value = wpCode;
+        if (rackDeviceWorkplaceDisplay) {
+            rackDeviceWorkplaceDisplay.textContent = `Стойка: ${wpCode}${wp && wp.room ? ' · ' + wp.room : ''}`;
+        }
+
+        if (item && item.id) {
+            rackDeviceModalTitle.textContent = 'Редактирование устройства стойки';
+            rackDeviceIdInput.value = item.id;
+            rackDeviceNameInput.value = item.name || '';
+            rackDeviceIpInput.value = item.ip || '';
+            rackDeviceNumberInput.value = item.inventory_number || '';
+            rackDeviceNumberInput.placeholder = item.inventory_number || '';
+
+            let notes = item.notes || '';
+            let unit = '';
+            const match = notes.match(/^\[([^\]]+)\]\s*(.*)$/);
+            if (match) {
+                unit = match[1];
+                notes = match[2];
+            }
+            rackDeviceUnitInput.value = unit;
+            rackDeviceNotesInput.value = notes;
+
+            const nLower = (item.name || '').toLowerCase();
+            if (nLower.includes('роутер') || nLower.includes('маршрутизатор')) {
+                rackDeviceTypeSelect.value = 'Маршрутизатор';
+            } else if (nLower.includes('сервер')) {
+                rackDeviceTypeSelect.value = 'Сервер';
+            } else if (nLower.includes('ибп') || nLower.includes('ups')) {
+                rackDeviceTypeSelect.value = 'ИБП';
+            } else if (nLower.includes('патч')) {
+                rackDeviceTypeSelect.value = 'Патч-панель';
+            } else {
+                rackDeviceTypeSelect.value = 'Коммутатор';
+            }
+
+            if (deleteRackDeviceBtn) deleteRackDeviceBtn.hidden = false;
+            if (saveRackDeviceBtn) saveRackDeviceBtn.textContent = 'Сохранить';
+        } else {
+            rackDeviceModalTitle.textContent = 'Новое устройство в стойку';
+            rackDeviceIdInput.value = '';
+            rackDeviceNumberInput.placeholder = `Например: INV_NW_${wpCode}_01`;
+            if (deleteRackDeviceBtn) deleteRackDeviceBtn.hidden = true;
+            if (saveRackDeviceBtn) saveRackDeviceBtn.textContent = 'Добавить в стойку';
+        }
+
+        rackDeviceModal.hidden = false;
+        rackDeviceNameInput.focus();
+    }
+
+    function closeRackDeviceModal() {
+        const rackDeviceModal = document.getElementById('rackDeviceModal');
+        if (rackDeviceModal) rackDeviceModal.hidden = true;
+        currentRackItem = null;
+        currentRackWp = null;
+    }
+
+    function initRackDeviceModal() {
+        const rackDeviceModal = document.getElementById('rackDeviceModal');
+        const rackDeviceForm = document.getElementById('rackDeviceForm');
+        const rackDeviceIdInput = document.getElementById('rackDeviceIdInput');
+        const rackDeviceWorkplaceCodeInput = document.getElementById('rackDeviceWorkplaceCodeInput');
+        const rackDeviceNameInput = document.getElementById('rackDeviceNameInput');
+        const rackDeviceTypeSelect = document.getElementById('rackDeviceTypeSelect');
+        const rackDeviceIpInput = document.getElementById('rackDeviceIpInput');
+        const rackDeviceNumberInput = document.getElementById('rackDeviceNumberInput');
+        const rackDeviceUnitInput = document.getElementById('rackDeviceUnitInput');
+        const rackDeviceNotesInput = document.getElementById('rackDeviceNotesInput');
+        const deleteRackDeviceBtn = document.getElementById('deleteRackDeviceBtn');
+
+        if (!rackDeviceModal) return;
+
+        rackDeviceModal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', closeRackDeviceModal);
+        });
+
+        if (rackDeviceForm) {
+            rackDeviceForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = rackDeviceIdInput.value;
+                const isEdit = Boolean(id);
+                const wpCode = rackDeviceWorkplaceCodeInput.value.trim();
+                const devType = rackDeviceTypeSelect.value;
+                const category = (devType === 'ИБП' || devType === 'Другое') ? 'Другое' : 'Сетевое оборудование';
+                const typeCode = (devType === 'ИБП' || devType === 'Другое') ? 'EQ' : 'NW';
+
+                const unit = rackDeviceUnitInput.value.trim();
+                const notesRaw = rackDeviceNotesInput.value.trim();
+                const finalNotes = unit ? `[${unit}] ${notesRaw}` : notesRaw;
+
+                const payload = {
+                    name: rackDeviceNameInput.value.trim(),
+                    category: category,
+                    type_code: typeCode,
+                    status: 'assigned',
+                    workplace_code: wpCode,
+                    employee_id: null,
+                    inventory_number: rackDeviceNumberInput.value.trim(),
+                    ip: rackDeviceIpInput.value.trim(),
+                    notes: finalNotes
+                };
+
+                const url = isEdit ? `/api/inventory/${id}/update/` : '/api/inventory/create/';
+                try {
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!resp.ok) {
+                        const txt = await resp.text();
+                        showToast('Ошибка сохранения: ' + txt, 'error');
+                        return;
+                    }
+                    showToast(isEdit ? 'Устройство обновлено' : 'Устройство добавлено в стойку', 'success');
+                    closeRackDeviceModal();
+                    await loadInventory();
+                    await loadPingerStatus();
+                    render();
+                } catch (err) {
+                    showToast('Ошибка: ' + err.message, 'error');
+                }
+            });
+        }
+
+        if (deleteRackDeviceBtn) {
+            deleteRackDeviceBtn.addEventListener('click', async () => {
+                if (!currentRackItem || !currentRackItem.id) return;
+                if (!confirm(`Удалить устройство «${currentRackItem.name}» из стойки?`)) return;
+                try {
+                    const resp = await fetch(`/api/inventory/${currentRackItem.id}/delete/`, { method: 'POST' });
+                    if (!resp.ok) {
+                        const txt = await resp.text();
+                        showToast('Ошибка удаления: ' + txt, 'error');
+                        return;
+                    }
+                    showToast('Устройство удалено из стойки', 'success');
+                    closeRackDeviceModal();
+                    await loadInventory();
+                    await loadPingerStatus();
+                    render();
+                } catch (err) {
+                    showToast('Ошибка: ' + err.message, 'error');
+                }
+            });
+        }
+    }
+
+    let currentPrinterWp = null;
+    let currentPrinterInv = null;
+
+    function openPrinterSettingsModal(wp, invItem = null) {
+        const printerSettingsModal = document.getElementById('printerSettingsModal');
+        const printerSettingsForm = document.getElementById('printerSettingsForm');
+        const printerWorkplaceIdInput = document.getElementById('printerWorkplaceIdInput');
+        const printerWorkplaceCodeInput = document.getElementById('printerWorkplaceCodeInput');
+        const printerLocationDisplay = document.getElementById('printerLocationDisplay');
+        const printerIpInput = document.getElementById('printerIpInput');
+        const printerNameInput = document.getElementById('printerNameInput');
+
+        if (!printerSettingsModal || !printerSettingsForm || !wp) return;
+        currentPrinterWp = wp;
+        currentPrinterInv = invItem;
+        printerSettingsForm.reset();
+
+        printerWorkplaceIdInput.value = wp.id || '';
+        const wpCode = wp.code || wp.id || '';
+        printerWorkplaceCodeInput.value = wpCode;
+        if (printerLocationDisplay) {
+            printerLocationDisplay.textContent = `${wpCode} · ${wp.room || 'Коридор'} (${floorsById[wp.floor]?.name || ''})`;
+        }
+
+        const ip = (invItem && invItem.ip) || wp.ip || '';
+        printerIpInput.value = ip;
+        printerNameInput.value = (invItem && invItem.name) || wp.label || 'Сетевое МФУ Kyocera';
+
+        printerSettingsModal.hidden = false;
+        printerIpInput.focus();
+    }
+
+    function closePrinterSettingsModal() {
+        const printerSettingsModal = document.getElementById('printerSettingsModal');
+        if (printerSettingsModal) printerSettingsModal.hidden = true;
+        currentPrinterWp = null;
+        currentPrinterInv = null;
+    }
+
+    function initPrinterSettingsModal() {
+        const printerSettingsModal = document.getElementById('printerSettingsModal');
+        const printerSettingsForm = document.getElementById('printerSettingsForm');
+        const printerWorkplaceCodeInput = document.getElementById('printerWorkplaceCodeInput');
+        const printerIpInput = document.getElementById('printerIpInput');
+        const printerNameInput = document.getElementById('printerNameInput');
+
+        if (!printerSettingsModal) return;
+
+        printerSettingsModal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', closePrinterSettingsModal);
+        });
+
+        if (printerSettingsForm) {
+            printerSettingsForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const wpCode = printerWorkplaceCodeInput.value.trim();
+                const ipVal = printerIpInput.value.trim();
+                const nameVal = printerNameInput.value.trim() || 'Сетевое МФУ';
+
+                if (currentPrinterWp) {
+                    currentPrinterWp.ip = ipVal;
+                }
+
+                const payload = {
+                    name: nameVal,
+                    category: 'Оргтехника',
+                    type_code: 'PR',
+                    status: 'assigned',
+                    workplace_code: wpCode,
+                    employee_id: null,
+                    ip: ipVal,
+                    notes: 'Сетевой принтер этажа'
+                };
+
+                const url = (currentPrinterInv && currentPrinterInv.id)
+                    ? `/api/inventory/${currentPrinterInv.id}/update/`
+                    : '/api/inventory/create/';
+
+                try {
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!resp.ok) {
+                        const txt = await resp.text();
+                        showToast('Ошибка сохранения параметров принтера: ' + txt, 'error');
+                        return;
+                    }
+                    showToast('Сетевые параметры принтера обновлены', 'success');
+                    closePrinterSettingsModal();
+                    await loadInventory();
+                    await loadPingerStatus();
+                    render();
+                } catch (err) {
                     showToast('Ошибка: ' + err.message, 'error');
                 }
             });
@@ -3806,6 +4137,8 @@
     initThemeToggle();
     initCookieBanner();
     initPingerModal();
+    initRackDeviceModal();
+    initPrinterSettingsModal();
     loadPingerStatus();
     setInterval(loadPingerStatus, 60000);
     loadInventory();

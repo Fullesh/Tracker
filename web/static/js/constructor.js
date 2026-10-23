@@ -679,7 +679,51 @@
 
         if (item.type === 'workplace') {
             const wp = item.data;
-            inspectorTitle.textContent = `Рабочее место ${wp.code}`;
+            const isPrinter = wp.kind === 'printer';
+            const isServer = wp.kind === 'server';
+            const isPC = wp.kind === 'pc';
+
+            inspectorTitle.textContent = `${isServer ? 'Стойка' : isPrinter ? 'Принтер' : 'Рабочее место'} ${wp.code}`;
+
+            let extraHtml = '';
+            if (isPrinter) {
+                extraHtml += `
+                    <div class="form-group">
+                        <label>IP-адрес принтера (мониторинг)</label>
+                        <input type="text" class="form-input" id="propIp" value="${escapeHtml(wp.ip || '')}" placeholder="например: 192.168.10.25">
+                    </div>
+                `;
+            } else if (isServer) {
+                const rackEquip = constructorInventory.filter(it => it.workplace_code === wp.code);
+                let equipListHtml = '';
+                if (rackEquip.length === 0) {
+                    equipListHtml = '<div class="rack-inspector-empty">В стойке пока нет оборудования</div>';
+                } else {
+                    equipListHtml = rackEquip.map(eq => `
+                        <div class="rack-inspector-item">
+                            <div class="rack-inspector-info">
+                                <div class="rack-inspector-name">${escapeHtml(eq.name)}</div>
+                                <div class="rack-inspector-meta">${escapeHtml(eq.type_code || 'NW')}${eq.ip ? ' · ' + escapeHtml(eq.ip) : ''}</div>
+                            </div>
+                            <div class="rack-inspector-actions">
+                                <button type="button" class="rack-inspector-btn" data-crack-edit="${eq.id}" title="Редактировать">✎</button>
+                                <button type="button" class="rack-inspector-btn rack-inspector-btn--danger" data-crack-del="${eq.id}" title="Удалить">×</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                extraHtml += `
+                    <div class="rack-inspector-box">
+                        <div class="rack-inspector-head">
+                            <h4>Оборудование стойки (${rackEquip.length})</h4>
+                            <button class="btn btn--ghost btn--icon-sm" type="button" id="cAddRackDeviceBtn" style="padding: 2px 8px; font-size: 11px;">+ Добавить</button>
+                        </div>
+                        <div class="rack-inspector-list">${equipListHtml}</div>
+                    </div>
+                `;
+            }
+
             inspectorBody.innerHTML = `
                 <div class="form-group">
                     <label>Код места</label>
@@ -694,11 +738,13 @@
                         <option value="server" ${wp.kind === 'server' ? 'selected' : ''}>Серверная стойка</option>
                     </select>
                 </div>
+                ${extraHtml}
+                ${isPC ? `
                 <div class="form-group emp-search-group">
                     <label>Сотрудник</label>
                     <input type="text" class="form-input" id="propEmployee" value="${escapeHtml(wp.employee || '')}" placeholder="Поиск по сотрудникам..." autocomplete="off">
                     <div class="emp-autocomplete-list" id="empAutocompleteList" hidden></div>
-                </div>
+                </div>` : ''}
                 <div class="form-group">
                     <label>Подпись / Оборудование</label>
                     <input type="text" class="form-input" id="propLabel" value="${escapeHtml(wp.label || '')}" placeholder="например: Стойка R1">
@@ -720,13 +766,55 @@
             `;
 
             document.getElementById('propCode').oninput = (e) => { wp.code = e.target.value; renderCanvas(); };
-            document.getElementById('propKind').onchange = (e) => { wp.kind = e.target.value; renderCanvas(); };
+            document.getElementById('propKind').onchange = (e) => { wp.kind = e.target.value; renderCanvas(); renderInspector(); };
             document.getElementById('propLabel').oninput = (e) => { wp.label = e.target.value; renderCanvas(); };
             document.getElementById('propRoom').oninput = (e) => { wp.room = e.target.value; };
             document.getElementById('propX').onchange = (e) => { wp.x = Number(e.target.value); renderCanvas(); };
             document.getElementById('propY').onchange = (e) => { wp.y = Number(e.target.value); renderCanvas(); };
 
-            setupEmployeeAutocomplete(wp);
+            const propIpEl = document.getElementById('propIp');
+            if (propIpEl) {
+                propIpEl.oninput = (e) => { wp.ip = e.target.value; };
+            }
+
+            const cAddRackDeviceBtn = document.getElementById('cAddRackDeviceBtn');
+            if (cAddRackDeviceBtn) {
+                cAddRackDeviceBtn.onclick = () => {
+                    openConstructorRackModal(null, wp.code);
+                };
+            }
+
+            inspectorBody.querySelectorAll('[data-crack-edit]').forEach(btn => {
+                btn.onclick = () => {
+                    const id = Number(btn.getAttribute('data-crack-edit'));
+                    const item = constructorInventory.find(it => it.id === id);
+                    if (item) openConstructorRackModal(item, wp.code);
+                };
+            });
+
+            inspectorBody.querySelectorAll('[data-crack-del]').forEach(btn => {
+                btn.onclick = async () => {
+                    const id = Number(btn.getAttribute('data-crack-del'));
+                    const item = constructorInventory.find(it => it.id === id);
+                    if (!item) return;
+                    if (!confirm(`Удалить «${item.name}» из стойки?`)) return;
+                    try {
+                        const resp = await fetch(`/api/inventory/${id}/delete/`, { method: 'POST' });
+                        if (resp.ok) {
+                            showToast('Устройство удалено из стойки', 'success');
+                            await loadConstructorInventory();
+                        } else {
+                            showToast('Ошибка удаления', 'error');
+                        }
+                    } catch (err) {
+                        showToast('Ошибка: ' + err.message, 'error');
+                    }
+                };
+            });
+
+            if (isPC) {
+                setupEmployeeAutocomplete(wp);
+            }
         } else if (item.type === 'label') {
             const lbl = item.data;
             inspectorTitle.textContent = 'Подпись помещения';
@@ -1279,10 +1367,186 @@
         }
     }
 
+    // ---------- Инвентарь стойки в конструкторе ----------
+    let constructorInventory = [];
+    let currentCRackItem = null;
+    let currentCRackWpCode = '';
+
+    async function loadConstructorInventory() {
+        try {
+            const resp = await fetch('/api/inventory/');
+            if (resp.ok) {
+                const data = await resp.json();
+                constructorInventory = data.items || [];
+                if (state.selectedItem && state.selectedItem.type === 'workplace') {
+                    renderInspector();
+                }
+            }
+        } catch (err) {
+            console.error('Ошибка загрузки инвентаря в конструкторе:', err);
+        }
+    }
+
+    function openConstructorRackModal(item = null, wpCode = '') {
+        const modal = document.getElementById('constructorRackModal');
+        const form = document.getElementById('constructorRackForm');
+        if (!modal || !form) return;
+
+        currentCRackItem = item;
+        currentCRackWpCode = wpCode;
+        form.reset();
+
+        const idInput = document.getElementById('cRackIdInput');
+        const wpInput = document.getElementById('cRackWpCodeInput');
+        const wpDisplay = document.getElementById('cRackWpDisplay');
+        const titleEl = document.getElementById('cRackModalTitle');
+        const nameInput = document.getElementById('cRackNameInput');
+        const typeSelect = document.getElementById('cRackTypeSelect');
+        const ipInput = document.getElementById('cRackIpInput');
+        const numInput = document.getElementById('cRackNumberInput');
+        const unitInput = document.getElementById('cRackUnitInput');
+        const notesInput = document.getElementById('cRackNotesInput');
+        const delBtn = document.getElementById('cRackDeleteBtn');
+        const saveBtn = document.getElementById('cRackSaveBtn');
+
+        wpInput.value = wpCode;
+        if (wpDisplay) wpDisplay.textContent = `Стойка ${wpCode}`;
+
+        if (item && item.id) {
+            titleEl.textContent = 'Редактирование устройства в стойке';
+            idInput.value = item.id;
+            nameInput.value = item.name || '';
+            ipInput.value = item.ip || '';
+            numInput.value = item.inventory_number || '';
+            numInput.placeholder = item.inventory_number || '';
+
+            let notes = item.notes || '';
+            let unit = '';
+            const match = notes.match(/^\[([^\]]+)\]\s*(.*)$/);
+            if (match) {
+                unit = match[1];
+                notes = match[2];
+            }
+            unitInput.value = unit;
+            notesInput.value = notes;
+
+            const nLower = (item.name || '').toLowerCase();
+            if (nLower.includes('роутер') || nLower.includes('маршрутизатор')) {
+                typeSelect.value = 'Маршрутизатор';
+            } else if (nLower.includes('сервер')) {
+                typeSelect.value = 'Сервер';
+            } else if (nLower.includes('ибп') || nLower.includes('ups')) {
+                typeSelect.value = 'ИБП';
+            } else if (nLower.includes('патч')) {
+                typeSelect.value = 'Патч-панель';
+            } else {
+                typeSelect.value = 'Коммутатор';
+            }
+
+            if (delBtn) delBtn.hidden = false;
+            if (saveBtn) saveBtn.textContent = 'Сохранить';
+        } else {
+            titleEl.textContent = 'Добавить оборудование в стойку';
+            idInput.value = '';
+            numInput.placeholder = `INV_NW_${wpCode}_01`;
+            if (delBtn) delBtn.hidden = true;
+            if (saveBtn) saveBtn.textContent = 'Добавить в стойку';
+        }
+
+        modal.hidden = false;
+        nameInput.focus();
+    }
+
+    function closeConstructorRackModal() {
+        const modal = document.getElementById('constructorRackModal');
+        if (modal) modal.hidden = true;
+        currentCRackItem = null;
+        currentCRackWpCode = '';
+    }
+
+    function initConstructorRackModal() {
+        const modal = document.getElementById('constructorRackModal');
+        const form = document.getElementById('constructorRackForm');
+        const delBtn = document.getElementById('cRackDeleteBtn');
+        if (!modal) return;
+
+        modal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', closeConstructorRackModal);
+        });
+
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('cRackIdInput').value;
+                const isEdit = Boolean(id);
+                const wpCode = document.getElementById('cRackWpCodeInput').value.trim();
+                const devType = document.getElementById('cRackTypeSelect').value;
+                const category = (devType === 'ИБП' || devType === 'Другое') ? 'Другое' : 'Сетевое оборудование';
+                const typeCode = (devType === 'ИБП' || devType === 'Другое') ? 'EQ' : 'NW';
+
+                const unit = document.getElementById('cRackUnitInput').value.trim();
+                const notesRaw = document.getElementById('cRackNotesInput').value.trim();
+                const finalNotes = unit ? `[${unit}] ${notesRaw}` : notesRaw;
+
+                const payload = {
+                    name: document.getElementById('cRackNameInput').value.trim(),
+                    category: category,
+                    type_code: typeCode,
+                    status: 'assigned',
+                    workplace_code: wpCode,
+                    employee_id: null,
+                    inventory_number: document.getElementById('cRackNumberInput').value.trim(),
+                    ip: document.getElementById('cRackIpInput').value.trim(),
+                    notes: finalNotes
+                };
+
+                const url = isEdit ? `/api/inventory/${id}/update/` : '/api/inventory/create/';
+                try {
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!resp.ok) {
+                        const txt = await resp.text();
+                        showToast('Ошибка сохранения: ' + txt, 'error');
+                        return;
+                    }
+                    showToast(isEdit ? 'Оборудование обновлено' : 'Оборудование добавлено в стойку', 'success');
+                    closeConstructorRackModal();
+                    await loadConstructorInventory();
+                } catch (err) {
+                    showToast('Ошибка: ' + err.message, 'error');
+                }
+            });
+        }
+
+        if (delBtn) {
+            delBtn.addEventListener('click', async () => {
+                if (!currentCRackItem || !currentCRackItem.id) return;
+                if (!confirm(`Удалить устройство «${currentCRackItem.name}» из стойки?`)) return;
+                try {
+                    const resp = await fetch(`/api/inventory/${currentCRackItem.id}/delete/`, { method: 'POST' });
+                    if (!resp.ok) {
+                        showToast('Ошибка удаления', 'error');
+                        return;
+                    }
+                    showToast('Устройство удалено из стойки', 'success');
+                    closeConstructorRackModal();
+                    await loadConstructorInventory();
+                } catch (err) {
+                    showToast('Ошибка: ' + err.message, 'error');
+                }
+            });
+        }
+    }
+
     // Инициализация
     editorSvg.classList.add('cursor-default');
     initThemeToggle();
     initCookieBanner();
+    initConstructorRackModal();
+    loadConstructorInventory();
     renderFloorTabs();
     resetZoom();
     renderCanvas();
