@@ -1791,6 +1791,17 @@ select.input {
     padding: 8px 12px;
     background: var(--bg-control);
     border-radius: var(--radius-s);
+    border: 1px solid transparent;
+    transition: background .15s, border-color .15s, transform .1s;
+}
+
+.emp-inventory-item--clickable {
+    cursor: pointer;
+}
+
+.emp-inventory-item--clickable:hover {
+    background: var(--bg-control-hover);
+    border-color: var(--line);
 }
 
 .emp-inventory-item__info {
@@ -1799,6 +1810,219 @@ select.input {
     gap: 8px;
     flex-wrap: wrap;
     min-width: 0;
+}
+
+.emp-inventory-item__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* Автодополнение сотрудника в форме оборудования и авто-подстановка места */
+.inv-emp-search-group {
+    position: relative;
+}
+
+.inv-emp-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.inv-emp-search-wrap .input {
+    padding-right: 34px;
+}
+
+.inv-emp-search-clear {
+    position: absolute;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    padding: 0;
+}
+
+.inv-emp-search-clear:hover {
+    background: var(--bg-control-hover);
+    color: var(--text-primary);
+}
+
+.inv-workplace-auto {
+    height: 44px;
+    padding: 0 14px;
+    border-radius: var(--radius-s);
+    background: var(--bg-page);
+    border: 1px dashed var(--line);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.inv-workplace-auto--assigned {
+    background: #eef6ff;
+    border: 1px solid #d2e4ff;
+    color: #0066cc;
+    font-weight: 600;
+}
+
+/* Выпадающий список автодополнения сотрудников */
+.emp-autocomplete-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 230px;
+    overflow-y: auto;
+    background: var(--bg-surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+.emp-autocomplete-item {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--line);
+    transition: background .12s;
+}
+
+.emp-autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.emp-autocomplete-item:hover,
+.emp-autocomplete-item--active {
+    background: var(--bg-control);
+}
+
+.emp-autocomplete-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00c2ff 0%, #0077ff 100%);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    object-fit: cover;
+}
+
+.emp-autocomplete-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.emp-autocomplete-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.emp-autocomplete-name mark {
+    background: var(--ya-yellow);
+    color: var(--ya-black);
+    padding: 0 1px;
+    border-radius: 2px;
+}
+
+.emp-autocomplete-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.emp-autocomplete-badge {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #eef6ff;
+    color: #0066cc;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.emp-autocomplete-empty {
+    padding: 12px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+/* Просмотр карточки оборудования (Read-Only) */
+.inventory-table tbody tr {
+    cursor: pointer;
+}
+
+.inv-modal-view__hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--line);
+}
+
+.inv-modal-view__main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.inv-modal-view__badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.inv-modal-view__qr {
+    width: 76px;
+    height: 76px;
+    padding: 6px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+}
+
+.inv-modal-view__qr svg {
+    width: 100%;
+    height: 100%;
+    display: block;
 }
 
 /* ==========================================================================
@@ -2391,6 +2615,21 @@ html.theme-transitioning *::after {
 [data-theme="dark"] .inventory-actions .btn--danger-ghost:hover,
 .theme-dark .inventory-actions .btn--danger-ghost:hover {
     background: rgba(252, 63, 29, .24);
+}
+[data-theme="dark"] .inv-workplace-auto--assigned,
+.theme-dark .inv-workplace-auto--assigned {
+    background: rgba(0, 119, 255, .15);
+    border-color: rgba(0, 119, 255, .3);
+    color: #66b2ff;
+}
+[data-theme="dark"] .emp-autocomplete-badge,
+.theme-dark .emp-autocomplete-badge {
+    background: rgba(0, 119, 255, .2);
+    color: #66b2ff;
+}
+[data-theme="dark"] .emp-autocomplete-list,
+.theme-dark .emp-autocomplete-list {
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .55);
 }
 
 
