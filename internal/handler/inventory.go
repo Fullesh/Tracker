@@ -161,8 +161,8 @@ func (h *Handler) UpdateInventoryItem(w http.ResponseWriter, r *http.Request) {
 		item.InventoryNumber = payload.InventoryNumber
 	}
 
-	item.WorkplaceCode = h.resolveWorkplaceCode(item.EmployeeID, item.WorkplaceCode)
 	item.EmployeeID = payload.EmployeeID
+	item.WorkplaceCode = h.resolveWorkplaceCode(item.EmployeeID, item.WorkplaceCode)
 	item.Notes = payload.Notes
 
 	if err := h.db.Save(&item).Error; err != nil {
