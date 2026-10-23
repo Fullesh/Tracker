@@ -275,7 +275,7 @@ func (h *Handler) QuickBookRoom(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) FinishMeetingEarly(w http.ResponseWriter, r *http.Request) {
-	var payload quickBookPayload
+	var payload finishEarlyPayload
 	json.NewDecoder(r.Body).Decode(&payload)
 	if payload.RoomCode == "" {
 		http.Error(w, "Не указан код переговорной", http.StatusBadRequest)
