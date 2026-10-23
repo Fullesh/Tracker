@@ -3,8 +3,14 @@ package handler
 import (
 	"PTracker/internal/domain"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 )
 
 type createTaskPayload struct {
@@ -16,6 +22,7 @@ type createTaskPayload struct {
 	Status      string `json:"status"`
 	Priority    string `json:"priority"`
 	Severity    string `json:"severity"`
+	Screenshot  string `json:"screenshot"`
 }
 
 func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
@@ -52,12 +59,17 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		Status:      payload.Status,
 		Priority:    payload.Priority,
 		Severity:    payload.Severity,
+		Screenshot:  strings.TrimSpace(payload.Screenshot),
 		WorkplaceID: wpID,
 	}
 
 	if err := h.db.Create(&task).Error; err != nil {
 		http.Error(w, "Ошибка создания задачи: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if h.sse != nil {
+		h.sse.Broadcast("task_created", task)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -119,10 +131,15 @@ func (h *Handler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 		task.Creator = payload.Creator
 	}
 	task.Assignee = payload.Assignee
+	task.Screenshot = strings.TrimSpace(payload.Screenshot)
 
 	if err := h.db.Save(&task).Error; err != nil {
 		http.Error(w, "Ошибка редактирования задачи: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if h.sse != nil {
+		h.sse.Broadcast("task_updated", task)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -143,8 +160,78 @@ func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Ошибка удаления задачи: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if h.sse != nil {
+		h.sse.Broadcast("task_deleted", map[string]any{"id": taskID})
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
+	})
+}
+
+func (h *Handler) TaskEvents(w http.ResponseWriter, r *http.Request) {
+	if h.sse != nil {
+		h.sse.ServeHTTP(w, r)
+	} else {
+		http.Error(w, "SSE сервис недоступен", http.StatusServiceUnavailable)
+	}
+}
+
+func (h *Handler) UploadTaskScreenshot(w http.ResponseWriter, r *http.Request) {
+	// Максимальный размер 15 МБ
+	if err := r.ParseMultipartForm(15 << 20); err != nil {
+		http.Error(w, "Файл слишком большой (максимум 15 МБ)", http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("screenshot")
+	if err != nil {
+		file, header, err = r.FormFile("file")
+		if err != nil {
+			http.Error(w, "Файл изображения не передан", http.StatusBadRequest)
+			return
+		}
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if ext == "" {
+		ext = ".png"
+	}
+	allowedExts := map[string]bool{
+		".png": true, ".jpg": true, ".jpeg": true, ".webp": true, ".gif": true,
+	}
+	if !allowedExts[ext] {
+		http.Error(w, "Недопустимый формат файла (разрешены png, jpg, jpeg, webp, gif)", http.StatusBadRequest)
+		return
+	}
+
+	uploadDir := filepath.Join("web", "static", "uploads", "tasks")
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		http.Error(w, "Ошибка создания директории загрузки: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fileName := fmt.Sprintf("task_%d_%d%s", time.Now().Unix(), time.Now().UnixNano()%100000, ext)
+	destPath := filepath.Join(uploadDir, fileName)
+	dst, err := os.Create(destPath)
+	if err != nil {
+		http.Error(w, "Ошибка сохранения файла: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		http.Error(w, "Ошибка записи файла: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	url := "/static/uploads/tasks/" + fileName
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"url":     url,
 	})
 }
