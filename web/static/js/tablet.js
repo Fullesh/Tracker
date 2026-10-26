@@ -1,5 +1,5 @@
 /**
- * Режим планшета-киоска для переговорных комнат (PTracker Tablet Mode)
+ * Режим планшета-киоска для переговорных комнат (Tracker Tablet Mode)
  */
 (function () {
     'use strict';

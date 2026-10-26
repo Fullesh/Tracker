@@ -119,7 +119,7 @@ docker compose down -v
    DB_PORT=5432
    DB_USER=postgres
    DB_PASSWORD=root
-   DB_NAME=ptracker_db
+   DB_NAME=tracker_db
    DB_SSLMODE=disable
    PORT=1111
    SESSION_SECRET=local-development-secret-key-32b
@@ -242,20 +242,20 @@ docker compose logs -f app
 
 ### Подключение к PostgreSQL внутри контейнера
 ```bash
-docker compose exec db psql -U postgres -d ptracker
+docker compose exec db psql -U postgres -d tracker
 ```
 
 ### Резервное копирование данных
 1. Бэкап базы данных PostgreSQL:
    ```bash
-   docker compose exec -T db pg_dump -U postgres ptracker > backup_$(date +%F).sql
+   docker compose exec -T db pg_dump -U postgres tracker > backup_$(date +%F).sql
    ```
 2. Бэкап загруженных скриншотов и медиа-файлов:
    ```bash
-   docker cp ptracker_app:/app/web/static/uploads ./uploads_backup
+   docker cp tracker_app:/app/web/static/uploads ./uploads_backup
    ```
 
 ### Восстановление из бэкапа
 ```bash
-docker compose exec -T db psql -U postgres -d ptracker < backup.sql
+docker compose exec -T db psql -U postgres -d tracker < backup.sql
 ```

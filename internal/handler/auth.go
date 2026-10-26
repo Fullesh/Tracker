@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"PTracker/internal/domain"
+	"Tracker/internal/domain"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -17,7 +17,7 @@ import (
 func getSessionSecret() []byte {
 	secret := os.Getenv("SESSION_SECRET")
 	if secret == "" {
-		secret = "ptracker-default-secure-cookie-secret-key-32b"
+		secret = "tracker-default-secure-cookie-secret-key-32b"
 	}
 	return []byte(secret)
 }

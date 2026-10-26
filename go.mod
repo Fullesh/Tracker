@@ -1,4 +1,4 @@
-module PTracker
+module Tracker
 
 go 1.27
 

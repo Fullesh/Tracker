@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"PTracker/internal/domain"
+	"Tracker/internal/domain"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -48,7 +48,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "Генеральный директор",
 		Department: "Кабинет директора",
 		WorkPhone:  "+7 (495) 100-01-01",
-		Email:      "voronov@ptracker.local",
+		Email:      "voronov@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
 	},
 	{
@@ -56,7 +56,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "Главный бухгалтер",
 		Department: "Бухгалтерия и кадры",
 		WorkPhone:  "+7 (495) 100-01-02",
-		Email:      "lebedeva@ptracker.local",
+		Email:      "lebedeva@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300",
 	},
 	{
@@ -64,7 +64,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "HR-менеджер",
 		Department: "Бухгалтерия и кадры",
 		WorkPhone:  "+7 (495) 100-01-03",
-		Email:      "smirnova@ptracker.local",
+		Email:      "smirnova@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=300",
 	},
 	{
@@ -72,7 +72,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "Руководитель отдела продаж",
 		Department: "Отдел продаж",
 		WorkPhone:  "+7 (495) 100-01-04",
-		Email:      "sokolov@ptracker.local",
+		Email:      "sokolov@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300",
 	},
 	{
@@ -80,7 +80,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "Менеджер по продажам",
 		Department: "Отдел продаж",
 		WorkPhone:  "+7 (495) 100-01-05",
-		Email:      "kuznetsova@ptracker.local",
+		Email:      "kuznetsova@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300",
 	},
 	{
@@ -88,7 +88,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "Менеджер по работе с клиентами",
 		Department: "Отдел продаж",
 		WorkPhone:  "+7 (495) 100-01-06",
-		Email:      "novikov@ptracker.local",
+		Email:      "novikov@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300",
 	},
 	{
@@ -96,7 +96,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "Lead Frontend Engineer",
 		Department: "Frontend & Mobile",
 		WorkPhone:  "+7 (495) 100-02-01",
-		Email:      "belov@ptracker.local",
+		Email:      "belov@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=300",
 	},
 	{
@@ -104,7 +104,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "Frontend Developer",
 		Department: "Frontend & Mobile",
 		WorkPhone:  "+7 (495) 100-02-02",
-		Email:      "morozova@ptracker.local",
+		Email:      "morozova@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300",
 	},
 	{
@@ -112,7 +112,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "iOS / Android Developer",
 		Department: "Frontend & Mobile",
 		WorkPhone:  "+7 (495) 100-02-03",
-		Email:      "vasiliev@ptracker.local",
+		Email:      "vasiliev@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=300",
 	},
 	{
@@ -120,7 +120,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "Lead Backend Developer",
 		Department: "Backend & DevOps",
 		WorkPhone:  "+7 (495) 100-02-04",
-		Email:      "petrov@ptracker.local",
+		Email:      "petrov@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=300",
 	},
 	{
@@ -128,7 +128,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "DevOps Engineer / SRE",
 		Department: "Backend & DevOps",
 		WorkPhone:  "+7 (495) 100-02-05",
-		Email:      "zaytsev@ptracker.local",
+		Email:      "zaytsev@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
 	},
 	{
@@ -136,7 +136,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "Golang Backend Developer",
 		Department: "Backend & DevOps",
 		WorkPhone:  "+7 (495) 100-02-06",
-		Email:      "kovalev@ptracker.local",
+		Email:      "kovalev@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300",
 	},
 	{
@@ -144,7 +144,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "QA Lead",
 		Department: "Отдел QA и тестирование",
 		WorkPhone:  "+7 (495) 100-02-07",
-		Email:      "fedorova@ptracker.local",
+		Email:      "fedorova@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=300",
 	},
 	{
@@ -152,7 +152,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "QA Automation Engineer",
 		Department: "Отдел QA и тестирование",
 		WorkPhone:  "+7 (495) 100-02-08",
-		Email:      "mikhailov@ptracker.local",
+		Email:      "mikhailov@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=300",
 	},
 	{
@@ -160,7 +160,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "Системный администратор",
 		Department: "Техническая поддержка",
 		WorkPhone:  "+7 (495) 100-02-09",
-		Email:      "orlov@ptracker.local",
+		Email:      "orlov@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1513956589380-bad6acb9b9d4?w=300",
 	},
 	{
@@ -168,7 +168,7 @@ var fallbackEmployees = []domain.Employee{
 		Position:   "Специалист техподдержки",
 		Department: "Техническая поддержка",
 		WorkPhone:  "+7 (495) 100-02-10",
-		Email:      "popov@ptracker.local",
+		Email:      "popov@tracker.local",
 		Photo:      "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=300",
 	},
 }

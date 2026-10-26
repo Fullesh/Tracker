@@ -16,7 +16,7 @@ RUN go mod download
 COPY . .
 
 # Компиляция статического бинарного файла для Linux
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /build/ptracker ./cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /build/tracker ./cmd/server/main.go
 
 # Этап 2: Финальный легковесный образ
 FROM alpine:3.21
@@ -27,7 +27,7 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata iputils
 
 # Копирование бинарного файла из этапа сборки
-COPY --from=builder /build/ptracker /app/ptracker
+COPY --from=builder /build/tracker /app/tracker
 
 # Копирование статических файлов и шаблонов
 COPY web /app/web
@@ -39,4 +39,4 @@ RUN mkdir -p /app/web/static/uploads/tasks && chmod -R 777 /app/web/static/uploa
 EXPOSE 1111
 
 # Точка входа
-ENTRYPOINT ["/app/ptracker"]
+ENTRYPOINT ["/app/tracker"]

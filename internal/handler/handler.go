@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"PTracker/internal/service"
+	"Tracker/internal/service"
 	"net/http"
 	"os"
 	"strings"

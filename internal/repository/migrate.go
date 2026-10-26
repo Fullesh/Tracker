@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"PTracker/internal/domain"
+	"Tracker/internal/domain"
 
 	"gorm.io/gorm"
 )

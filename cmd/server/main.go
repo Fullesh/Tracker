@@ -1,12 +1,12 @@
 package main
 
 import (
-	"PTracker/internal/config"
-	"PTracker/internal/domain"
-	"PTracker/internal/handler"
-	"PTracker/internal/repository"
-	"PTracker/internal/seed"
-	"PTracker/internal/service"
+	"Tracker/internal/config"
+	"Tracker/internal/domain"
+	"Tracker/internal/handler"
+	"Tracker/internal/repository"
+	"Tracker/internal/seed"
+	"Tracker/internal/service"
 	"flag"
 	"log"
 	"net/http"

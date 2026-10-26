@@ -1,7 +1,7 @@
 package service
 
 import (
-	"PTracker/internal/domain"
+	"Tracker/internal/domain"
 	"context"
 	"fmt"
 	"log"

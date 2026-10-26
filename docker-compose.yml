@@ -1,18 +1,18 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: ptracker_db
+    container_name: tracker_db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-      POSTGRES_DB: ${DB_NAME:-ptracker}
+      POSTGRES_DB: ${DB_NAME:-tracker}
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-ptracker}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-tracker}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,7 +21,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ptracker_app
+    container_name: tracker_app
     restart: unless-stopped
     depends_on:
       db:
@@ -33,10 +33,10 @@ services:
       DB_PORT: 5432
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
-      DB_NAME: ${DB_NAME:-ptracker}
+      DB_NAME: ${DB_NAME:-tracker}
       DB_SSLMODE: disable
       PORT: 1111
-      SESSION_SECRET: ${SESSION_SECRET:-ptracker-production-cookie-secret-key-32b}
+      SESSION_SECRET: ${SESSION_SECRET:-tracker-production-cookie-secret-key-32b}
       PINGER_ENABLED: ${PINGER_ENABLED:-false}
       FNG_API_KEY: ${FNG_API_KEY:-}
     volumes:

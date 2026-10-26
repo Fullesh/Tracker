@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"PTracker/internal/domain"
+	"Tracker/internal/domain"
 	"encoding/json"
 	"fmt"
 	"io"
