@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 var defaultAssignees = []map[string]any{
@@ -69,6 +71,24 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	var floors []domain.Floor
 	var employees []domain.Employee
 	var tasks []domain.Task
+	var assignees []map[string]any
+	for _, emp := range employees {
+		pos := strings.ToLower(emp.Position)
+		dept := strings.ToLower(emp.Department)
+		if strings.Contains(pos, "мто") || strings.Contains(dept, "мто") ||
+			strings.Contains(pos, "администратор") || strings.Contains(pos, "сисадмин") ||
+			strings.Contains(pos, "инженер") || strings.Contains(pos, "devops") ||
+			strings.Contains(dept, "it") || strings.Contains(dept, "it") {
+			assignees = append(assignees, map[string]any{
+				"id":   strconv.Itoa(int(emp.ID)),
+				"name": emp.FullName,
+				"role": emp.Position,
+			})
+		}
+	}
+	if len(assignees) == 0 {
+		assignees = defaultAssignees
+	}
 
 	h.db.Order("id ASC").Find(&tasks)
 	h.db.Preload("Walls").Preload("Labels").Preload("Workplaces").Find(&floors)
@@ -82,7 +102,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		"floors":      floors,
 		"employees":   employees,
 		"tasks":       tasks,
-		"assignees":   defaultAssignees,
+		"assignees":   assignees,
 		"statuses":    defaultStatuses,
 		"priorities":  defaultPriorities,
 		"severities":  defaultSeverities,
