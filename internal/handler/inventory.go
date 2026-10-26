@@ -21,6 +21,24 @@ type inventoryPayload struct {
 	InventoryNumber string `json:"inventory_number"`
 }
 
+type batchInventoryItemPayload struct {
+	Name            string `json:"name"`
+	Category        string `json:"category"`
+	TypeCode        string `json:"type_code"`
+	IP              string `json:"ip"`
+	Status          string `json:"status"`
+	WorkplaceCode   string `json:"workplace_code"`
+	EmployeeID      *uint  `json:"employee_id"`
+	Notes           string `json:"notes"`
+	InventoryNumber string `json:"inventory_number"`
+	Quantity        uint   `json:"quantity"`
+}
+
+type batchCreateInventoryPayload struct {
+	Name  string                      `json:"invoice_number"`
+	Items []batchInventoryItemPayload `json:"items"`
+}
+
 func (h *Handler) resolveWorkplaceCode(employeeID *uint, fallbackCode string) string {
 	if employeeID != nil && *employeeID > 0 {
 		var emp domain.Employee
