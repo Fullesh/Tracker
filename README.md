@@ -74,7 +74,7 @@ Tracker — это веб-платформа для комплексного у�
 ### Запуск одной командой
 1. Склонируйте репозиторий и перейдите в каталог проекта:
    ```bash
-   git clone <url_репозитория>
+   git clone https://github.com/Fullesh/Tracker.git
    cd PTracker
    ```
 
