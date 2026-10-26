@@ -72,6 +72,7 @@ func (h *Handler) InitRoutes() http.Handler {
 	mux.HandleFunc("POST /api/inventory/create/{$}", h.RequireMTOOrAdmin(h.CreateInventoryItem))
 	mux.HandleFunc("POST /api/inventory/{id}/update/{$}", h.RequireMTOOrAdmin(h.UpdateInventoryItem))
 	mux.HandleFunc("POST /api/inventory/{id}/delete/{$}", h.RequireMTOOrAdmin(h.DeleteInventoryItem))
+	mux.HandleFunc("POST /api/inventory/batch-create/{$}", h.RequireMTOOrAdmin(h.BatchCreateInventoryItems))
 
 	// REST PINGER SERVICE (доступен только системным администраторам и администраторам системы)
 	mux.HandleFunc("GET /api/pinger/status/{$}", h.RequirePinger(h.GetPingerStatus))
