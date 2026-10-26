@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход — PTracker</title>
+    <script>
+        (function() {
+            var saved = localStorage.getItem('ptracker.theme');
+            var dark = saved ? saved === 'dark' : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+        })();
+    </script>
+    <link rel="stylesheet" href="/static/css/tracker.css">
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-page);
+            font-family: var(--font);
+            color: var(--text-primary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Ambient glowing background */
+        .login-bg-glow {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(0, 119, 255, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(255, 219, 77, 0.06) 0%, transparent 40%);
+        }
+
+        [data-theme="dark"] .login-bg-glow {
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(0, 194, 255, 0.1) 0%, transparent 45%),
+                radial-gradient(circle at 80% 80%, rgba(59, 130, 246, 0.08) 0%, transparent 45%);
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            padding: 24px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .login-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-l);
+            box-shadow: var(--shadow-modal);
+            padding: 36px 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            animation: card-appear 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes card-appear {
+            from { opacity: 0; transform: translateY(16px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .login-header {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .login-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .login-logo .logo-mark {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: #00c2ff;
+        }
+
+        .login-logo .logo-text {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .login-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
+        }
+
+        .login-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        .login-error {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 12px 14px;
+            border-radius: var(--radius-s);
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: shake 0.3s ease;
+        }
+
+        [data-theme="dark"] .login-error {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.35);
+            color: #fca5a5;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-4px); }
+            40%, 80% { transform: translateX(4px); }
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .form-input {
+            height: 44px;
+            padding: 0 14px;
+            border-radius: var(--radius-s);
+            border: 1px solid var(--line);
+            background: var(--bg-control);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .form-input:focus {
+            border-color: #0077ff;
+            background: var(--bg-surface);
+            box-shadow: 0 0 0 3px rgba(0, 119, 255, 0.15);
+        }
+
+        [data-theme="dark"] .form-input:focus {
+            border-color: #00c2ff;
+            box-shadow: 0 0 0 3px rgba(0, 194, 255, 0.2);
+        }
+
+        .btn-submit {
+            height: 46px;
+            border-radius: var(--radius-s);
+            background: var(--ya-yellow);
+            color: #000;
+            font-weight: 600;
+            font-size: 15px;
+            border: none;
+            cursor: pointer;
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .btn-submit:hover {
+            background: var(--ya-yellow-hover);
+        }
+
+        .btn-submit:active {
+            transform: scale(0.99);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .login-hint {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            line-height: 1.4;
+            margin: 0;
+            text-align: center;
+        }
+
+        .theme-toggle-corner {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 1px solid var(--line);
+            background: var(--bg-surface);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            box-shadow: var(--shadow-card);
+            transition: all 0.2s;
+            z-index: 20;
+        }
+
+        .theme-toggle-corner:hover {
+            background: var(--bg-control);
+            color: var(--text-primary);
+        }
+
+        .theme-toggle-corner svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        .theme-icon-sun { display: none; }
+        .theme-icon-moon { display: block; }
+        [data-theme="dark"] .theme-icon-sun { display: block; }
+        [data-theme="dark"] .theme-icon-moon { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="login-bg-glow"></div>
+
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="login-logo">
+                <span class="logo-mark" aria-hidden="true"></span>
+                <span class="logo-text">Трекер</span>
+            </div>
+            <h1 class="login-title">Вход в систему</h1>
+            <p class="login-subtitle">Введите учетные данные для доступа к задачам и карте офиса</p>
+        </div>
+
+        <div id="loginError" class="login-error" style="display: none;"></div>
+
+        <form class="login-form" id="loginForm" autocomplete="on">
+            <div class="form-group">
+                <label class="form-label" for="username">Логин</label>
+                <input class="form-input" id="username" name="username" type="text" required autofocus placeholder="Логин (например, admin)" autocomplete="username">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password">Пароль</label>
+                <input class="form-input" id="password" name="password" type="password" required placeholder="Пароль" autocomplete="current-password">
+            </div>
+
+            <button class="btn-submit" id="submitBtn" type="submit">
+                <span>Войти в систему</span>
+            </button>
+        </form>
+    </div>
+</div>
+
+<button class="theme-toggle-corner" id="themeToggleBtn" type="button" title="Переключить тему" aria-label="Переключить тему">
+    <svg viewBox="0 0 24 24" class="theme-icon-moon"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
+    <svg viewBox="0 0 24 24" class="theme-icon-sun"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0a.996.996 0 0 0 0-1.41l-1.06-1.06zm1.06-10.96a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36a.996.996 0 0 0 0-1.41.996.996 0 0 0 0-1.41l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>
+</button>
+
+<script>
+(function() {
+    const form = document.getElementById('loginForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const errorEl = document.getElementById('loginError');
+    const themeBtn = document.getElementById('themeToggleBtn');
+
+    // Theme toggle
+    themeBtn.addEventListener('click', () => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const next = isDark ? 'light' : 'dark';
+        if (next === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+        }
+        localStorage.setItem('ptracker.theme', next);
+    });
+
+    // Form submit
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorEl.style.display = 'none';
+        errorEl.textContent = '';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Вход...';
+
+        const username = form.username.value.trim();
+        const password = form.password.value;
+
+        try {
+            const resp = await fetch('/api/auth/login/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await resp.json().catch(() => ({}));
+
+            if (!resp.ok || !data.success) {
+                errorEl.textContent = data.error || 'Неверный логин или пароль';
+                errorEl.style.display = 'flex';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Войти в систему';
+                return;
+            }
+
+            // Redirect to home page or saved return url
+            const params = new URLSearchParams(window.location.search);
+            const returnUrl = params.get('next') || '/';
+            window.location.href = returnUrl;
+        } catch (err) {
+            errorEl.textContent = 'Сетевая ошибка при входе. Попробуйте снова.';
+            errorEl.style.display = 'flex';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Войти в систему';
+        }
+    });
+})();
+</script>
+</body>
+</html>

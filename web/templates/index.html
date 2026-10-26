@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PTracker — Задачи</title>
+    <script>
+        (function() {
+            var saved = localStorage.getItem('ptracker.theme');
+            var dark = saved ? saved === 'dark' : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+        })();
+    </script>
+    <link rel="stylesheet" href="static/css/tracker.css">
+</head>
+<body>
+<div class="app">
+    <div class="sidebar-overlay" id="sidebarOverlay" hidden></div>
+    <!-- Боковое меню -->
+    <aside class="sidebar" id="appSidebar">
+        <div class="sidebar__logo">
+            <span class="logo-mark" aria-hidden="true"></span>
+            <span class="logo-text">Трекер</span>
+        </div>
+        <nav class="sidebar__nav">
+            <a class="nav-item nav-item--active" href="#board" data-view="board">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>
+                Доска
+            </a>
+            <a class="nav-item" href="#map" data-view="map">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+                Задачи на карте
+            </a>
+            <a class="nav-item" href="#my-tasks" data-view="my-tasks" id="myTasksNavBtn">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                Мои задачи
+            </a>
+            <a class="nav-item" href="#employees" data-view="employees">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                Сотрудники
+            </a>
+            <a class="nav-item" href="#rooms" data-view="rooms" id="roomsNavBtn">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+                Переговорные
+            </a>
+            <a class="nav-item" href="#inventory" data-view="inventory" id="inventoryNavBtn" hidden>
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M20 2H4c-1 0-2 1-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1-1-2-2-2zm-1 18H5V9h14v11zm1-13H4V4h16v3z"/><path d="M9 12h6v2H9z"/></svg>
+                Инвентаризация
+            </a>
+            <a class="nav-item" href="/constructor" id="constructorNavBtn">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                Конструктор карт
+            </a>
+        </nav>
+        <div class="sidebar__section">
+            <div class="sidebar__title">Исполнители</div>
+            <ul class="people" id="peopleList"></ul>
+        </div>
+        <div class="sidebar__footer" id="sidebarFooter"></div>
+    </aside>
+
+    <!-- Основная часть -->
+    <main class="main">
+        <header class="topbar">
+            <div class="topbar__heading">
+                <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Открыть меню">
+                    <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
+                </button>
+                <h1 id="pageTitle">Задачи</h1>
+                <span class="counter" id="taskCounter">0</span>
+            </div>
+            <div class="topbar__actions">
+                <div class="workday-widget" id="workdayWidget"></div>
+                <div class="search">
+                    <svg viewBox="0 0 24 24" class="search__icon"><path d="M10 4a6 6 0 1 0 3.9 10.6l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>
+                    <input type="search" id="searchInput" placeholder="Поиск: задача, сотрудник, место">
+                </div>
+                <button class="btn btn--ghost" id="pingerStatusBtn" type="button" title="Мониторинг сети (Pinger)">
+                    <span class="pinger-indicator" id="pingerIndicator"></span>
+                    <span>Pinger</span>
+                </button>
+                <button class="btn btn--ghost" id="toggleViewBtn" type="button">
+                    <svg viewBox="0 0 24 24" class="btn__icon"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+                    <span id="toggleViewText">Задачи на карте</span>
+                </button>
+                <button class="btn btn--action" id="createBtn" type="button">
+                    <span class="btn__plus">+</span> Создать задачу
+                </button>
+            </div>
+        </header>
+
+        <!-- Фильтры задач -->
+        <section class="filters" id="taskFilters">
+            <label class="select">
+                <span class="select__label">Исполнитель</span>
+                <select id="filterAssignee"><option value="">Все</option></select>
+            </label>
+            <label class="select">
+                <span class="select__label">Priority</span>
+                <select id="filterPriority"><option value="">Все</option></select>
+            </label>
+            <label class="select">
+                <span class="select__label">Severity</span>
+                <select id="filterSeverity"><option value="">Все</option></select>
+            </label>
+            <button class="btn btn--ghost" id="resetFilters" type="button">Сбросить</button>
+        </section>
+
+        <!-- Фильтры сотрудников -->
+        <section class="filters" id="employeeFilters" hidden>
+            <label class="select">
+                <span class="select__label">Отдел</span>
+                <select id="filterEmpDept"><option value="">Все отделы</option></select>
+            </label>
+            <label class="select">
+                <span class="select__label">Рабочее место</span>
+                <select id="filterEmpWorkplace">
+                    <option value="">Все сотрудники</option>
+                    <option value="assigned">С рабочим местом</option>
+                    <option value="unassigned">Не задано</option>
+                </select>
+            </label>
+            <label class="select">
+                <span class="select__label">Этаж</span>
+                <select id="filterEmpFloor">
+                    <option value="">Все этажи</option>
+                </select>
+            </label>
+            <button class="btn btn--ghost" id="resetEmpFilters" type="button">Сбросить</button>
+        </section>
+
+        <!-- Фильтры инвентаря -->
+        <section class="filters" id="inventoryFilters" hidden>
+            <label class="select">
+                <span class="select__label">Статус</span>
+                <select id="filterInvStatus">
+                    <option value="all">Все статусы</option>
+                    <option value="assigned">В работе</option>
+                    <option value="storage">На складе</option>
+                    <option value="repair">В ремонте</option>
+                    <option value="decommissioned">Списано</option>
+                </select>
+            </label>
+            <label class="select">
+                <span class="select__label">Категория</span>
+                <select id="filterInvCategory">
+                    <option value="">Все категории</option>
+                    <option value="Монитор">Мониторы</option>
+                    <option value="Компьютер">Компьютеры</option>
+                    <option value="Ноутбук">Ноутбуки</option>
+                    <option value="Оргтехника">Оргтехника</option>
+                    <option value="Сетевое оборудование">Сетевое оборудование</option>
+                    <option value="Другое">Другое</option>
+                </select>
+            </label>
+            <button class="btn btn--ghost" id="resetInvFilters" type="button">Сбросить</button>
+            <button class="btn btn--action" id="openOcrModalBtn" type="button" style="margin-left: auto;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: -2px;">
+                    <path d="M4 7V4h3m10 0h3v3M4 17v3h3m10 0h3v-3M9 12h6M12 9v6"/>
+                </svg>
+                Распознать накладную (OCR)
+            </button>
+        </section>
+
+        <!-- Фильтры переговорных -->
+        <section class="filters" id="roomFilters" hidden>
+            <label class="select">
+                <span class="select__label">Дата</span>
+                <input type="date" class="input input--filter-date" id="roomDateInput" style="padding: 6px 10px; font-size: 13px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--bg-surface); color: var(--text);">
+            </label>
+            <label class="select">
+                <span class="select__label">Этаж</span>
+                <select id="filterRoomFloor"><option value="">Все этажи</option></select>
+            </label>
+            <button class="btn btn--ghost" id="todayRoomsBtn" type="button">Сегодня</button>
+        </section>
+
+        <section class="board" id="board"></section>
+
+        <!-- Карта офиса -->
+        <section class="office" id="officeView" hidden>
+            <div class="office__toolbar">
+                <div class="floor-tabs" id="floorTabs" role="tablist"></div>
+                <div class="legend">
+                    <span class="legend__item"><i class="legend__dot st-ok"></i>Всё работает</span>
+                    <span class="legend__item"><i class="legend__dot st-s4"></i>S4</span>
+                    <span class="legend__item"><i class="legend__dot st-s3"></i>S3</span>
+                    <span class="legend__item"><i class="legend__dot st-s2"></i>S2</span>
+                    <span class="legend__item"><i class="legend__dot st-s1"></i>S1</span>
+                </div>
+                <a class="btn btn--ghost" href="/constructor" id="editFloorBtn">
+                    <svg viewBox="0 0 24 24" class="btn__icon"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                    <span>Редактор этажа</span>
+                </a>
+            </div>
+            <div class="office__layout">
+                <div class="office__canvas" id="officeCanvas">
+                    <svg id="floorSvg" class="floor" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid meet"></svg>
+                    <!-- Всплывающая карточка сотрудника и его задач при наведении на рабочее место -->
+                    <div class="desk-hover-card" id="deskHoverCard" hidden></div>
+                </div>
+                <aside class="office__panel" id="officePanel"></aside>
+            </div>
+        </section>
+
+        <!-- Список сотрудников -->
+        <section class="employees-view" id="employeesView" hidden>
+            <div class="employees-grid" id="employeesGrid"></div>
+            <div class="employees-empty" id="employeesEmpty" hidden>
+                <p>Сотрудники по выбранным критериям не найдены</p>
+            </div>
+        </section>
+
+        <!-- Раздел: Мои задачи -->
+        <section class="my-tasks-view" id="myTasksView" hidden>
+            <div class="my-tasks-header">
+                <p class="my-tasks-header__desc">Задачи, созданные вами, и задачи, направленные на ваше рабочее место</p>
+                <button class="btn btn--action" id="createMyTaskBtn" type="button" hidden>
+                    <span class="btn__plus">+</span> Создать задачу
+                </button>
+            </div>
+            <div class="my-tasks-grid" id="myTasksGrid"></div>
+            <div class="my-tasks-empty" id="myTasksEmpty" hidden>
+                <p>У вас пока нет задач в этом разделе</p>
+            </div>
+        </section>
+
+        <!-- Раздел: Инвентаризация -->
+        <section class="inventory-view" id="inventoryView" hidden>
+            <div class="inventory-table-container">
+                <table class="inventory-table">
+                    <thead>
+                        <tr>
+                            <th>Инв. номер</th>
+                            <th>Наименование</th>
+                            <th>Категория / Тип</th>
+                            <th>Статус</th>
+                            <th>Рабочее место</th>
+                            <th>Сотрудник</th>
+                            <th>Заметки</th>
+                            <th class="inventory-actions-th">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryTableBody"></tbody>
+                </table>
+                <div class="inventory-empty" id="inventoryEmpty" hidden>
+                    <p>Оборудование по выбранным критериям не найдено</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Раздел: Бронирование переговорных -->
+        <section class="rooms-view" id="roomsView" hidden>
+            <div class="rooms-header-bar">
+                <div class="rooms-header-bar__info">
+                    <p class="rooms-header-bar__desc">Интерактивное расписание и бронирование переговорных комнат офиса</p>
+                </div>
+                <button class="btn btn--action" id="openCreateBookingModalBtn" type="button">
+                    <span class="btn__plus">+</span> Забронировать переговорную
+                </button>
+            </div>
+            <div class="rooms-grid" id="roomsGrid"></div>
+            <div class="rooms-empty" id="roomsEmpty" hidden>
+                <p>Переговорные комнаты не найдены</p>
+            </div>
+        </section>
+    </main>
+</div>
+
+<!-- Модальное окно задачи -->
+<div class="modal" id="taskModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <form class="modal__dialog" id="taskForm" autocomplete="off">
+        <div class="modal__header">
+            <h2 id="modalTitle">Новая задача</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <input type="hidden" name="id">
+            <label class="field">
+                <span class="field__label">Название <span class="req">*</span></span>
+                <input class="input" name="title" required maxlength="200" placeholder="Что нужно сделать?">
+            </label>
+            <label class="field">
+                <span class="field__label">Описание</span>
+                <textarea class="input input--area" name="description" rows="4" placeholder="Подробности, шаги воспроизведения, ожидаемый результат"></textarea>
+            </label>
+            <div class="field">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <span class="field__label" style="margin-bottom:0;">Скриншоты ошибки / файлы</span>
+                    <span class="task-screenshot-counter" id="taskScreenshotCounter" style="font-size:12px; font-weight:600; color:var(--text-muted);">0 / 10</span>
+                </div>
+                <input type="hidden" name="screenshot" id="taskScreenshotInput">
+                <div class="task-screenshot-zone" id="taskScreenshotZone">
+                    <div class="task-screenshot-grid" id="taskScreenshotGrid"></div>
+                    <div class="task-screenshot-prompt" id="taskScreenshotPrompt">
+                        <label class="btn btn--ghost btn--xs task-screenshot-pick-btn" id="taskScreenshotPickBtn">
+                            <span>Прикрепить файл</span>
+                            <input type="file" id="taskScreenshotFileInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
+                        </label>
+                        <span class="task-screenshot-hint" id="taskScreenshotHint">или вставьте из буфера (Ctrl+V) / перетащите (до 10 шт.)</span>
+                    </div>
+                    <div class="task-screenshot-limit-msg" id="taskScreenshotLimitMsg" style="font-size:12px; color:var(--text-muted); font-style:italic;" hidden>
+                        Прикреплено максимальное количество скриншотов (10 из 10)
+                    </div>
+                </div>
+            </div>
+            <div class="grid-2">
+                <label class="field">
+                    <span class="field__label">Создал</span>
+                    <input class="input" name="creator" list="creatorList" placeholder="ФИО сотрудника" autocomplete="off">
+                    <datalist id="creatorList"></datalist>
+                </label>
+                <label class="field">
+                    <span class="field__label">Рабочее место</span>
+                    <select class="input" name="workplace"></select>
+                </label>
+            </div>
+            <div class="grid-2">
+                <label class="field">
+                    <span class="field__label">Исполнитель</span>
+                    <select class="input" name="assignee"></select>
+                </label>
+                <label class="field">
+                    <span class="field__label">Статус</span>
+                    <select class="input" name="status"></select>
+                </label>
+                <label class="field">
+                    <span class="field__label">Priority</span>
+                    <select class="input" name="priority"></select>
+                </label>
+                <label class="field">
+                    <span class="field__label">Severity</span>
+                    <select class="input" name="severity"></select>
+                </label>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn--danger-ghost" type="button" id="deleteBtn" hidden>Удалить</button>
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--action" type="submit" id="saveBtn">Создать</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Модальное окно сотрудника (просмотр и редактирование) -->
+<div class="modal" id="employeeModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--wide" id="employeeDialog"></div>
+</div>
+
+<!-- Модальное окно авторизации -->
+<div class="modal" id="loginModal" hidden>
+    <div class="modal__overlay" id="loginModalOverlay" data-close></div>
+    <form class="modal__dialog modal__dialog--small" id="loginForm" autocomplete="off">
+        <div class="modal__header">
+            <h2 id="loginModalTitle">Вход в систему</h2>
+            <button class="icon-btn" type="button" id="loginModalCloseBtn" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <div id="loginError" class="emp-modal__perm-banner emp-modal__perm-banner--error" hidden></div>
+            <p id="loginModalSubtitle" class="modal__hint" style="margin-top: 0; margin-bottom: 12px; color: var(--text-secondary);" hidden>
+                Для доступа к трекеру, карте офиса и задачам требуется войти под своей учетной записью.
+            </p>
+            <label class="field">
+                <span class="field__label">Логин <span class="req">*</span></span>
+                <input class="input" name="username" required autocomplete="username" placeholder="Логин (например admin)">
+            </label>
+            <label class="field">
+                <span class="field__label">Пароль <span class="req">*</span></span>
+                <input class="input" type="password" name="password" required autocomplete="current-password" placeholder="Пароль">
+            </label>
+            <p class="modal__hint">
+                Сотрудники используют корпоративный логин и пароль по умолчанию (Welcome123!).
+            </p>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn--ghost" type="button" id="loginModalCancelBtn" data-close>Отмена</button>
+            <button class="btn btn--action" type="submit" style="flex: 1;">Войти в систему</button>
+        </div>
+    </form>
+</div>
+
+<!-- Модальное окно инвентаря (просмотр, создание и редактирование) -->
+<div class="modal" id="inventoryModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--wide" id="inventoryViewDialog" hidden></div>
+    <form class="modal__dialog modal__dialog--wide" id="inventoryForm" autocomplete="off">
+        <div class="modal__header">
+            <h2 id="invModalTitle">Новое оборудование</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <input type="hidden" name="id">
+            <div class="grid-2">
+                <label class="field">
+                    <span class="field__label">Наименование <span class="req">*</span></span>
+                    <input class="input" name="name" required maxlength="200" placeholder="Например: Монитор Dell UltraSharp 27">
+                </label>
+                <label class="field">
+                    <span class="field__label">Категория <span class="req">*</span></span>
+                    <select class="input" name="category" id="invCategorySelect" required>
+                        <option value="Монитор">Монитор</option>
+                        <option value="Компьютер">Компьютер</option>
+                        <option value="Ноутбук">Ноутбук</option>
+                        <option value="Оргтехника">Оргтехника</option>
+                        <option value="Сетевое оборудование">Сетевое оборудование</option>
+                        <option value="Другое">Другое</option>
+                    </select>
+                </label>
+            </div>
+            <div class="grid-2">
+                <label class="field">
+                    <span class="field__label">Код типа <span class="req">*</span></span>
+                    <select class="input" name="type_code" id="invTypeCodeInput" required>
+                        <option value="MO">MO — Монитор</option>
+                        <option value="PC">PC — Компьютер</option>
+                        <option value="NB">NB — Ноутбук</option>
+                        <option value="PR">PR — Оргтехника</option>
+                        <option value="NW">NW — Сетевое оборудование</option>
+                        <option value="EQ">EQ — Другое</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field__label">Статус <span class="req">*</span></span>
+                    <select class="input" name="status" id="invStatusSelect" required>
+                        <option value="assigned">В работе</option>
+                        <option value="storage">На складе</option>
+                        <option value="repair">В ремонте</option>
+                        <option value="decommissioned">Списано</option>
+                    </select>
+                </label>
+            </div>
+            <div class="grid-2">
+                <div class="field inv-emp-search-group">
+                    <span class="field__label">Ответственный сотрудник</span>
+                    <input type="hidden" name="employee_id" id="invEmployeeSelect" value="">
+                    <div class="inv-emp-search-wrap">
+                        <input class="input" type="text" id="invEmployeeSearchInput" placeholder="Поиск по ФИО, должности, отделу..." autocomplete="off">
+                        <button class="inv-emp-search-clear" type="button" id="invEmployeeClearBtn" title="Сбросить сотрудника" hidden>&times;</button>
+                    </div>
+                    <div class="emp-autocomplete-list" id="invEmpAutocompleteList" hidden></div>
+                </div>
+                <div class="field">
+                    <span class="field__label">Рабочее место (автоматически)</span>
+                    <input type="hidden" name="workplace_code" id="invWorkplaceInput" value="">
+                    <div class="inv-workplace-auto" id="invWorkplaceAutoDisplay">На складе (STOCK)</div>
+                </div>
+            </div>
+            <div class="grid-2">
+                <label class="field">
+                    <span class="field__label">Инвентарный номер</span>
+                    <input class="input" name="inventory_number" id="invNumberInput" placeholder="Оставьте пустым для автогенерации (например INV_MO_9-301_01)">
+                </label>
+                <label class="field">
+                    <span class="field__label">IP-адрес (для мониторинга / сети)</span>
+                    <input class="input" name="ip" id="invIpInput" placeholder="например: 192.168.1.50">
+                </label>
+            </div>
+            <label class="field">
+                <span class="field__label">Заметки / Характеристики</span>
+                <textarea class="input input--area" name="notes" rows="3" placeholder="Серийный номер, комплектация, особенности"></textarea>
+            </label>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-left">
+                <button class="btn btn--danger-ghost" type="button" id="invDeleteBtn" hidden>Удалить</button>
+                <button class="btn btn--ghost" type="button" id="invPrintStickerBtn" hidden>Печать наклейки</button>
+            </div>
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--action" type="submit" id="invSaveBtn">Сохранить</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Контейнер для термопечати наклейки 50x30 мм -->
+<div class="sticker-print-area" id="stickerPrintArea" hidden>
+    <div class="sticker-content">
+        <div class="sticker-qr" id="stickerQrContainer"></div>
+        <div class="sticker-info">
+            <div class="sticker-brand">PTRACKER МТО</div>
+            <div class="sticker-number" id="stickerInvNumber"></div>
+            <div class="sticker-name" id="stickerInvName"></div>
+            <div class="sticker-place" id="stickerInvPlace"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения удаления оборудования -->
+<div class="modal" id="deleteInventoryModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--small">
+        <div class="modal__header">
+            <h2>Удаление оборудования</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <p id="deleteInventoryModalMessage" class="modal__confirm-text"></p>
+            <p class="modal__confirm-sub">
+                Это действие необратимо. Запись об оборудовании будет безвозвратно удалена из базы данных.
+            </p>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--danger" type="button" id="confirmDeleteInventoryBtn">Удалить оборудование</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения списания оборудования -->
+<div class="modal" id="decommissionInventoryModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--small">
+        <div class="modal__header">
+            <h2>Списание оборудования</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <p id="decommissionInventoryModalMessage" class="modal__confirm-text"></p>
+            <p class="modal__confirm-sub">
+                Оборудование получит статус «Списано» (decommissioned) и будет отмечено как выведенное из эксплуатации.
+            </p>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--danger" type="button" id="confirmDecommissionInventoryBtn">Списать оборудование</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно управления Pinger -->
+<div class="modal" id="pingerModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--wide">
+        <div class="modal__header">
+            <h2>Сетевой мониторинг (Pinger)</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <div class="pinger-config-box">
+                <div class="pinger-config-row">
+                    <label class="switch-label">
+                        <input type="checkbox" id="pingerEnabledToggle">
+                        <span class="switch-text">Автоматически создавать задачи при потере сетевой доступности</span>
+                    </label>
+                </div>
+                <div class="pinger-config-row pinger-config-row--split">
+                    <label class="field" style="max-width: 220px;">
+                        <span class="field__label">Интервал опроса (минуты)</span>
+                        <input class="input" type="number" id="pingerIntervalInput" min="1" max="1440" value="10">
+                    </label>
+                    <button class="btn btn--ghost" type="button" id="pingerCheckNowBtn">
+                        <svg viewBox="0 0 24 24" class="btn__icon"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+                        <span>Опросить сейчас</span>
+                    </button>
+                </div>
+            </div>
+            <div class="pinger-devices-header">
+                <h3>Опрашиваемое оборудование с IP-адресом</h3>
+                <span class="counter" id="pingerDeviceCount">0</span>
+            </div>
+            <div class="pinger-devices-list" id="pingerDevicesList"></div>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Закрыть</button>
+                <button class="btn btn--action" type="button" id="savePingerConfigBtn">Сохранить настройки</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения удаления задачи -->
+<div class="modal" id="deleteTaskModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--small">
+        <div class="modal__header">
+            <h2>Удаление задачи</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <p id="deleteTaskModalMessage" class="modal__confirm-text"></p>
+            <p class="modal__confirm-sub">
+                Это действие необратимо. Задача будет безвозвратно удалена из трекера.
+            </p>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--danger" type="button" id="confirmDeleteTaskBtn">Удалить задачу</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно оборудования стойки -->
+<div class="modal" id="rackDeviceModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--small">
+        <form id="rackDeviceForm" novalidate>
+            <input type="hidden" name="id" id="rackDeviceIdInput">
+            <input type="hidden" name="workplace_code" id="rackDeviceWorkplaceCodeInput">
+            <div class="modal__header">
+                <h2 id="rackDeviceModalTitle">Оборудование в стойке</h2>
+                <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="modal__body modal__body--form">
+                <div class="field" style="margin-bottom: 12px;">
+                    <span class="field__label">Стойка размещения</span>
+                    <div id="rackDeviceWorkplaceDisplay" style="font-weight: 600; font-size: 13.5px; color: var(--accent);">SRV-01</div>
+                </div>
+
+                <label class="field">
+                    <span class="field__label">Наименование устройства *</span>
+                    <input class="input" name="name" id="rackDeviceNameInput" placeholder="Например: Коммутатор Cisco Catalyst 2960-X" required>
+                </label>
+
+                <div class="form-row">
+                    <label class="field">
+                        <span class="field__label">Тип устройства</span>
+                        <select class="input" name="device_type" id="rackDeviceTypeSelect">
+                            <option value="Коммутатор">Коммутатор (Switch)</option>
+                            <option value="Маршрутизатор">Маршрутизатор (Router)</option>
+                            <option value="Сервер">Сервер (Server Unit)</option>
+                            <option value="ИБП">ИБП (UPS)</option>
+                            <option value="Патч-панель">Патч-панель (Patch Panel)</option>
+                            <option value="Другое">Другое устройство</option>
+                        </select>
+                    </label>
+
+                    <label class="field">
+                        <span class="field__label">IP-адрес (для мониторинга)</span>
+                        <input class="input" name="ip" id="rackDeviceIpInput" placeholder="192.168.1.10">
+                    </label>
+                </div>
+
+                <div class="form-row">
+                    <label class="field">
+                        <span class="field__label">Инвентарный номер</span>
+                        <input class="input" name="inventory_number" id="rackDeviceNumberInput" placeholder="Оставьте пустым для автогенерации">
+                    </label>
+
+                    <label class="field">
+                        <span class="field__label">Юнит / Место в стойке</span>
+                        <input class="input" name="unit_slot" id="rackDeviceUnitInput" placeholder="Например: U12-U14">
+                    </label>
+                </div>
+
+                <label class="field">
+                    <span class="field__label">Характеристики и примечания</span>
+                    <textarea class="input input--textarea" name="notes" id="rackDeviceNotesInput" rows="2" placeholder="Характеристики портов, назначение, VLAN"></textarea>
+                </label>
+            </div>
+            <div class="modal__footer">
+                <div class="modal__footer-left">
+                    <button class="btn btn--danger-ghost" type="button" id="deleteRackDeviceBtn" hidden>Удалить из стойки</button>
+                </div>
+                <div class="modal__footer-right">
+                    <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                    <button class="btn btn--action" type="submit" id="saveRackDeviceBtn">Сохранить</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно настройки сетевого принтера -->
+<div class="modal" id="printerSettingsModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--small">
+        <form id="printerSettingsForm" novalidate>
+            <input type="hidden" name="workplace_id" id="printerWorkplaceIdInput">
+            <input type="hidden" name="workplace_code" id="printerWorkplaceCodeInput">
+            <div class="modal__header">
+                <h2>Настройки сетевого принтера</h2>
+                <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="modal__body modal__body--form">
+                <div class="field" style="margin-bottom: 12px;">
+                    <span class="field__label">Локация принтера</span>
+                    <div id="printerLocationDisplay" style="font-weight: 600; font-size: 13.5px; color: var(--accent);">1-PRN (Коридор)</div>
+                </div>
+
+                <label class="field">
+                    <span class="field__label">Сетевой IP-адрес принтера *</span>
+                    <input class="input" name="ip" id="printerIpInput" placeholder="Например: 192.168.10.25" required>
+                    <span class="field__hint">По этому адресу Pinger выполняет автоматический мониторинг доступности печати.</span>
+                </label>
+
+                <label class="field">
+                    <span class="field__label">Название / Модель принтера</span>
+                    <input class="input" name="name" id="printerNameInput" placeholder="Например: Сетевое МФУ Kyocera ECOSYS">
+                </label>
+            </div>
+            <div class="modal__footer">
+                <div class="modal__footer-right">
+                    <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                    <button class="btn btn--action" type="submit" id="savePrinterSettingsBtn">Сохранить</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно просмотра скриншота/изображения -->
+<div class="modal" id="imageViewerModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--image-viewer">
+        <div class="modal__header">
+            <h3 id="imageViewerTitle">Скриншот задачи</h3>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span id="imageViewerCounter" style="font-size:12px; font-weight:600; color:var(--text-muted);">1 / 1</span>
+                <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+            </div>
+        </div>
+        <div class="modal__body image-viewer-body">
+            <button type="button" class="image-viewer-nav-btn image-viewer-nav-btn--prev" id="imageViewerPrevBtn" title="Предыдущий скриншот" aria-label="Предыдущий">&lsaquo;</button>
+            <img src="" alt="Изображение задачи" id="imageViewerImg" class="image-viewer-img">
+            <button type="button" class="image-viewer-nav-btn image-viewer-nav-btn--next" id="imageViewerNextBtn" title="Следующий скриншот" aria-label="Следующий">&rsaquo;</button>
+        </div>
+        <div class="modal__footer">
+            <a href="" target="_blank" class="btn btn--ghost" id="imageViewerOpenTabBtn">Открыть в новой вкладке</a>
+            <button class="btn btn--action" type="button" data-close>Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно бронирования переговорной -->
+<div class="modal" id="roomBookingModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <form class="modal__dialog" id="roomBookingForm" autocomplete="off">
+        <div class="modal__header">
+            <h2 id="roomBookingModalTitle">Забронировать переговорную</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <label class="field">
+                <span class="field__label">Переговорная комната <span class="req">*</span></span>
+                <select class="input" name="room_code" id="bookingRoomSelect" required></select>
+            </label>
+            <label class="field">
+                <span class="field__label">Тема встречи <span class="req">*</span></span>
+                <input class="input" name="title" required maxlength="150" placeholder="Например: Синхронизация команды">
+            </label>
+            <label class="field">
+                <span class="field__label">Организатор <span class="req">*</span></span>
+                <input class="input" name="organizer" id="bookingOrganizerInput" required maxlength="100" placeholder="Имя организатора">
+            </label>
+            <div class="field">
+                <span class="field__label">Дата встречи <span class="req">*</span></span>
+                <input class="input" type="date" name="date" id="bookingDateInput" required>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <label class="field">
+                    <span class="field__label">Начало <span class="req">*</span></span>
+                    <input class="input" type="time" name="start_time" id="bookingStartTime" required>
+                </label>
+                <label class="field">
+                    <span class="field__label">Окончание <span class="req">*</span></span>
+                    <input class="input" type="time" name="end_time" id="bookingEndTime" required>
+                </label>
+            </div>
+            <div class="form-error" id="bookingErrorMsg" hidden style="color: #ef4444; font-size: 13px; margin-top: 8px; padding: 8px 12px; background: rgba(239,68,68,0.1); border-radius: var(--radius-s); border: 1px solid rgba(239,68,68,0.2);"></div>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--action" type="submit" id="submitBookingBtn">Забронировать</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Модальное окно подтверждения удаления бронирования -->
+<div class="modal" id="deleteBookingModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--small">
+        <div class="modal__header">
+            <h2>Отмена бронирования</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="modal__body">
+            <p id="deleteBookingModalMessage" class="modal__confirm-text"></p>
+            <p class="modal__confirm-sub">Переговорная будет освобождена для других сотрудников.</p>
+        </div>
+        <div class="modal__footer">
+            <div class="modal__footer-right">
+                <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+                <button class="btn btn--danger" type="button" id="confirmDeleteBookingBtn">Отменить бронь</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно распознавания накладной (OCR) -->
+<div class="modal" id="ocrModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__dialog modal__dialog--wide ocr-modal-dialog">
+        <div class="modal__header">
+            <h2>Распознавание накладной (OCR)</h2>
+            <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
+        </div>
+
+        <div class="modal__body ocr-modal__body">
+            <!-- Шаг 1: Загрузка или выбор источника -->
+            <div class="ocr-upload-section" id="ocrUploadSection">
+                <div class="ocr-dropzone" id="ocrDropzone">
+                    <input type="file" id="ocrFileInput" accept="image/*,application/pdf" hidden>
+                    <div class="ocr-dropzone__icon">
+                        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.75">
+                            <path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1M16 8l-4-4-4 4M12 4v12"/>
+                        </svg>
+                    </div>
+                    <div class="ocr-dropzone__text">
+                        <strong>Перетащите скан или фото накладной</strong>
+                        <span>или нажмите для выбора файла (PNG, JPG, WebP)</span>
+                    </div>
+                    <div class="ocr-dropzone__actions">
+                        <button class="btn btn--action btn--sm" type="button" id="ocrSelectFileBtn">Выбрать файл</button>
+                        <button class="btn btn--ghost btn--sm" type="button" id="ocrDemoSampleBtn" title="Загрузить тестовый пример ТОРГ-12 для быстрой проверки">Загрузить образец накладной</button>
+                    </div>
+                </div>
+
+                <!-- Альтернатива: ручная вставка текста накладной -->
+                <div class="ocr-text-fallback">
+                    <button class="btn-link" type="button" id="ocrToggleTextInputBtn">
+                        Или вставить распознанный/скопированный текст накладной вручную
+                    </button>
+                    <div class="ocr-text-input-wrap" id="ocrTextInputWrap" hidden>
+                        <textarea class="textarea" id="ocrRawTextInput" rows="4" placeholder="Вставьте сюда строки накладной или счета, например:&#10;1. Монитор 27&quot; Dell UltraSharp P2723D - 2 шт SN: CN09876543&#10;2. Ноутбук Lenovo ThinkPad T14 Gen 3 - 1 шт SN: PF3ABC12&#10;3. Мышь беспроводная Logitech Signature M650 - 3 шт&#10;4. Клавиатура проводная Logitech K120 USB - 3 шт&#10;5. Коммутатор управляемый MikroTik CRS326 - 1 шт SN: 98AB76CD&#10;6. Кресло офисное компьютерное Metta - 2 шт"></textarea>
+                        <button class="btn btn--action btn--sm" type="button" id="ocrParseRawTextBtn" style="margin-top: 8px;">Распознать текст</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Индикатор процесса OCR -->
+            <div class="ocr-progress-card" id="ocrProgressCard" hidden>
+                <div class="ocr-progress-spinner"></div>
+                <div class="ocr-progress-info">
+                    <div class="ocr-progress-title" id="ocrProgressStatus">Инициализация движка OCR...</div>
+                    <div class="ocr-progress-bar-bg">
+                        <div class="ocr-progress-bar-fill" id="ocrProgressBarFill" style="width: 0%;"></div>
+                    </div>
+                    <div class="ocr-progress-detail" id="ocrProgressDetail">Загрузка языковой модели rus+eng...</div>
+                </div>
+            </div>
+
+            <!-- Шаг 2: Таблица верификации и редактирования перед созданием -->
+            <div class="ocr-results-section" id="ocrResultsSection" hidden>
+                <div class="ocr-results-toolbar">
+                    <div class="ocr-invoice-meta">
+                        <label class="field field--inline">
+                            <span class="field__label">Номер накладной:</span>
+                            <input class="input input--sm" type="text" id="ocrInvoiceNumberInput" placeholder="Например: УПД № 104 от 26.10.2026">
+                        </label>
+                        <label class="field field--inline">
+                            <span class="field__label">На склад / Место:</span>
+                            <select class="input input--sm" id="ocrTargetWorkplaceSelect">
+                                <option value="STOCK">Склад (STOCK)</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="ocr-results-stats">
+                        Найдено позиций: <strong id="ocrDetectedCount">0</strong>
+                    </div>
+                </div>
+
+                <div class="ocr-table-container">
+                    <table class="ocr-items-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 36px; text-align: center;">
+                                    <input type="checkbox" id="ocrSelectAllItems" checked title="Выбрать все">
+                                </th>
+                                <th>Наименование оборудования <span class="req">*</span></th>
+                                <th style="width: 170px;">Категория</th>
+                                <th style="width: 90px;">Тип</th>
+                                <th style="width: 80px;">Кол-во</th>
+                                <th style="width: 160px;">Серийный / Прим.</th>
+                                <th style="width: 44px; text-align: center;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="ocrItemsTableBody">
+                            <!-- Строки генерируются динамически -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="ocr-table-footer">
+                    <button class="btn btn--ghost btn--sm" type="button" id="ocrAddRowBtn">
+                        + Добавить строку
+                    </button>
+                    <button class="btn btn--ghost btn--sm" type="button" id="ocrReuploadBtn">
+                        Загрузить другой документ
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal__footer ocr-modal__footer">
+            <button class="btn btn--ghost" type="button" data-close>Отмена</button>
+            <button class="btn btn--action" type="button" id="ocrSubmitBatchBtn" disabled>
+                Создать карточки инвентаря (<span id="ocrSubmitCountBadge">0</span>)
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Предупреждение о сборе Cookie -->
+<aside class="cookie-banner" id="cookieBanner" hidden aria-live="polite">
+    <div class="cookie-banner__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1-1.66 0-3-1.34-3-3 0-.55-.45-1-1-1zm-2 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm-3 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm7 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z"/></svg></div>
+    <div class="cookie-banner__content">
+        <div class="cookie-banner__title">Предупреждение о сборе cookie</div>
+        <p class="cookie-banner__text">Системные администраторы отобрали Ваши cookie, но Вы можете взять ещё на кухне.</p>
+    </div>
+    <button class="btn btn--action cookie-banner__btn" id="cookieAcceptBtn" type="button">Звучит честно!</button>
+</aside>
+<!-- Всплывающее уведомление (Toast) -->
+<div class="toast" id="trackerToast"></div>
+
+<!-- Плавающая кнопка переключения темы -->
+<button class="theme-toggle-fab" id="themeToggleBtn" type="button" title="Переключить тему" aria-label="Переключить тему">
+    <svg viewBox="0 0 24 24" class="theme-toggle-fab__icon theme-icon-moon"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
+    <svg viewBox="0 0 24 24" class="theme-toggle-fab__icon theme-icon-sun"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0a.996.996 0 0 0 0-1.41l-1.06-1.06zm1.06-10.96a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>
+</button>
+
+<script id="tracker-config" type="application/json">
+    {{ .TrackerConfigJSON }}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="static/js/tracker.js"></script>
+</body>
+</html>

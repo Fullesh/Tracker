@@ -1,0 +1,147 @@
+package domain
+
+import "time"
+
+// Wall описывает отрезок стены на интерактивной карте этажа
+type Wall struct {
+	ID      uint `gorm:"primaryKey" json:"id"`
+	FloorID uint `gorm:"not null; index" json:"floor_id"`
+
+	X1 int `gorm:"not null" json:"x1"`
+	Y1 int `gorm:"not null" json:"y1"`
+	X2 int `gorm:"not null" json:"x2"`
+	Y2 int `gorm:"not null" json:"y2"`
+}
+
+// RoomLabel представляет текстовую подпись помещения на карте этажа
+type RoomLabel struct {
+	ID      uint   `gorm:"primaryKey" json:"id"`
+	FloorID uint   `gorm:"not null;index" json:"floor_id"`
+	Text    string `gorm:"size:100;not null;index" json:"text"`
+	X       int    `gorm:"not null" json:"x"`
+	Y       int    `gorm:"not null" json:"y"`
+}
+
+// Floor содержит схему этажа и связанные графические элементы
+type Floor struct {
+	ID     uint   `gorm:"primaryKey" json:"id"`
+	Name   string `gorm:"size:100;not null" json:"name"`
+	Order  int    `gorm:"default:1;not null" json:"order"`
+	Width  int    `gorm:"default:1000;not null" json:"width"`
+	Height int    `gorm:"default:600;not null" json:"height"`
+
+	Walls      []Wall      `gorm:"constraint:OnDelete:CASCADE;" json:"walls,omitempty"`
+	Labels     []RoomLabel `gorm:"constraint:OnDelete:CASCADE;" json:"labels,omitempty"`
+	Workplaces []Workplace `gorm:"constraint:OnDelete:CASCADE;" json:"workplaces,omitempty"`
+}
+
+// Workplace представляет рабочее место или переговорную на карте офиса
+type Workplace struct {
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	FloorID  uint   `gorm:"not null;index" json:"floor_id"`
+	IP       string `gorm:"size:45" json:"ip"`
+	Code     string `gorm:"size:20;uniqueIndex;not null" json:"code"`
+	Kind     string `gorm:"size:20;default:'pc';not null" json:"kind"`
+	Employee string `gorm:"size:150" json:"employee"`
+	Label    string `gorm:"size:150" json:"label"`
+	Room     string `gorm:"size:150" json:"room"`
+	X        int    `gorm:"not null" json:"x"`
+	Y        int    `gorm:"not null" json:"y"`
+	Tasks    []Task `gorm:"constraint:OnDelete:CASCADE;" json:"tasks,omitempty"`
+}
+
+// Employee содержит карточку сотрудника и привязку к рабочему месту
+type Employee struct {
+	ID             uint            `gorm:"primaryKey" json:"id"`
+	User           *User           `gorm:"foreignKey:EmployeeID" json:"user,omitempty"`
+	FullName       string          `gorm:"size:200;not null;index" json:"full_name"`
+	Photo          string          `gorm:"size:255" json:"photo_url"`
+	Position       string          `gorm:"size:150" json:"position"`
+	Department     string          `gorm:"size:150;not null;index" json:"department"`
+	WorkPhone      string          `gorm:"size:50" json:"work_phone"`
+	Email          string          `gorm:"size:255" json:"email"`
+	WorkplaceID    *uint           `gorm:"constraint:OnDelete:SET NULL;" json:"workplace_id,omitempty"`
+	Workplace      *Workplace      `gorm:"foreignKey:WorkplaceID" json:"workplace,omitempty"`
+	Equipment      string          `gorm:"type:text" json:"equipment"`
+	InventoryItems []InventoryItem `gorm:"foreignKey:EmployeeID" json:"inventory_items,omitempty"`
+	CanEdit        bool            `gorm:"-" json:"can_edit"`
+	CreatedAt      time.Time       `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt      time.Time       `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
+
+// Task представляет задачу трекера или заявку сотрудника
+type Task struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	WorkplaceID *uint     `gorm:"index;constraint:OnDelete:SET NULL;" json:"workplace"`
+	Creator     string    `gorm:"size:150" json:"creator"`
+	Assignee    string    `gorm:"size:50" json:"assignee"`
+	Title       string    `gorm:"size:255;not null" json:"title"`
+	Description string    `gorm:"type:text" json:"description"`
+	Status      string    `gorm:"size:50;default:'created';not null;index" json:"status"`
+	Priority    string    `gorm:"size:50;default:'urgent';not null;index" json:"priority"`
+	Severity    string    `gorm:"size:50;default:'minor';not null;index" json:"severity"`
+	Screenshot  string    `gorm:"size:500" json:"screenshot"`
+	CreatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
+
+// User описывает учетную запись пользователя системы для авторизации
+type User struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	EmployeeID   *uint     `gorm:"index;constraint:OnDelete:SET NULL;" json:"employee_id,omitempty"`
+	Employee     *Employee `gorm:"foreignKey:EmployeeID" json:"employee"`
+	Username     string    `gorm:"size:20;uniqueIndex;not null" json:"username"`
+	PasswordHash string    `gorm:"size:255;not null" json:"-"`
+	IsAdmin      bool      `gorm:"default:false" json:"is_admin"`
+	CreatedAt    time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+}
+
+// WorkSession хранит интервал рабочего дня сотрудника и учет пауз
+type WorkSession struct {
+	ID             uint       `gorm:"primaryKey" json:"id"`
+	UserID         uint       `gorm:"index;not null" json:"user_id"`
+	User           *User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Status         string     `gorm:"size:20;default:'active';not null;index" json:"status"` // "active", "paused", "finished
+	StartedAt      time.Time  `gorm:"not null" json:"started_at"`
+	PausedAt       *time.Time `json:"paused_at,omitempty"`
+	PausedDuration int        `gorm:"default:0;not null" json:"paused_duration"` // накопленная пауза в секундах
+	FinishedAt     *time.Time `json:"finished_at,omitempty"`
+	CreatedAt      time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt      time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
+
+// InventoryItem представляет единицу материально-технического оборудования
+type InventoryItem struct {
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	InventoryNumber string    `gorm:"size:100;uniqueIndex;notnull" json:"inventory_number"`
+	IP              string    `gorm:"size:45" json:"ip"`
+	Name            string    `gorm:"size:200;notnull" json:"name"`
+	Category        string    `gorm:"size:50;notnull;index" json:"category"`
+	TypeCode        string    `gorm:"size:10;notnull" json:"type_code"`
+	Status          string    `gorm:"size:50;default:'assigned';not null;index" json:"status"`
+	WorkplaceCode   string    `gorm:"size:50" json:"workplace_code"`
+	EmployeeID      *uint     `gorm:"index;constraint:OnDelete:SET NULL;" json:"employee_id,omitempty"`
+	Employee        *Employee `gorm:"foreignKey:EmployeeID" json:"employee,omitempty"`
+	Notes           string    `gorm:"type:text" json:"notes"`
+	CreatedAt       time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt       time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
+
+// Setting хранит ключ-значение глобальных настроек системы
+type Setting struct {
+	Key       string    `gorm:"primaryKey;size:100" json:"key"`
+	Value     string    `gorm:"type:text" json:"value"`
+	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
+
+// RoomBooking хранит интервал бронирования переговорной комнаты
+type RoomBooking struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	RoomCode  string    `gorm:"size:50;index;notnull" json:"room_code"`
+	RoomName  string    `gorm:"size:40;notnull" json:"room_name"`
+	Title     string    `gorm:"size:255;not null" json:"title"`
+	Organizer string    `gorm:"size:100;notnull" json:"organizer"`
+	StartTime time.Time `gorm:"not null;index" json:"start_time"`
+	EndTime   time.Time `gorm:"not null;index" json:"end_time"`
+	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+}
