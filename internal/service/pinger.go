@@ -24,6 +24,7 @@ type DeviceStatus struct {
 	LastCheckedAt time.Time `json:"last_checked_at"`
 }
 
+// PingerService осуществляет периодический опрос доступности оборудования и рабочих мест
 type PingerService struct {
 	db              *gorm.DB
 	sse             *SSEHub

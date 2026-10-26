@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// neuteredFileSystem блокирует просмотр содержимого директорий при отсутствии index.html
 type neuteredFileSystem struct {
 	fs http.FileSystem
 }

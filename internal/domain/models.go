@@ -2,6 +2,7 @@ package domain
 
 import "time"
 
+// Wall описывает отрезок стены на интерактивной карте этажа
 type Wall struct {
 	ID      uint `gorm:"primaryKey" json:"id"`
 	FloorID uint `gorm:"not null; index" json:"floor_id"`
@@ -12,6 +13,7 @@ type Wall struct {
 	Y2 int `gorm:"not null" json:"y2"`
 }
 
+// RoomLabel представляет текстовую подпись помещения на карте этажа
 type RoomLabel struct {
 	ID      uint   `gorm:"primaryKey" json:"id"`
 	FloorID uint   `gorm:"not null;index" json:"floor_id"`
@@ -20,6 +22,7 @@ type RoomLabel struct {
 	Y       int    `gorm:"not null" json:"y"`
 }
 
+// Floor содержит схему этажа и связанные графические элементы
 type Floor struct {
 	ID     uint   `gorm:"primaryKey" json:"id"`
 	Name   string `gorm:"size:100;not null" json:"name"`
@@ -32,6 +35,7 @@ type Floor struct {
 	Workplaces []Workplace `gorm:"constraint:OnDelete:CASCADE;" json:"workplaces,omitempty"`
 }
 
+// Workplace представляет рабочее место или переговорную на карте офиса
 type Workplace struct {
 	ID       uint   `gorm:"primaryKey" json:"id"`
 	FloorID  uint   `gorm:"not null;index" json:"floor_id"`
@@ -46,6 +50,7 @@ type Workplace struct {
 	Tasks    []Task `gorm:"constraint:OnDelete:CASCADE;" json:"tasks,omitempty"`
 }
 
+// Employee содержит карточку сотрудника и привязку к рабочему месту
 type Employee struct {
 	ID             uint            `gorm:"primaryKey" json:"id"`
 	User           *User           `gorm:"foreignKey:EmployeeID" json:"user,omitempty"`
@@ -64,6 +69,7 @@ type Employee struct {
 	UpdatedAt      time.Time       `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
+// Task представляет задачу трекера или заявку сотрудника
 type Task struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	WorkplaceID *uint     `gorm:"index;constraint:OnDelete:SET NULL;" json:"workplace"`
@@ -79,6 +85,7 @@ type Task struct {
 	UpdatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
+// User описывает учетную запись пользователя системы для авторизации
 type User struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
 	EmployeeID   *uint     `gorm:"index;constraint:OnDelete:SET NULL;" json:"employee_id,omitempty"`
@@ -89,6 +96,7 @@ type User struct {
 	CreatedAt    time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
 }
 
+// WorkSession хранит интервал рабочего дня сотрудника и учет пауз
 type WorkSession struct {
 	ID             uint       `gorm:"primaryKey" json:"id"`
 	UserID         uint       `gorm:"index;not null" json:"user_id"`
@@ -96,12 +104,13 @@ type WorkSession struct {
 	Status         string     `gorm:"size:20;default:'active';not null;index" json:"status"` // "active", "paused", "finished
 	StartedAt      time.Time  `gorm:"not null" json:"started_at"`
 	PausedAt       *time.Time `json:"paused_at,omitempty"`
-	PausedDuration int        `gorm:"default:0;not null" json:"paused_duration"` //накопленная пауза в секундах
+	PausedDuration int        `gorm:"default:0;not null" json:"paused_duration"` // накопленная пауза в секундах
 	FinishedAt     *time.Time `json:"finished_at,omitempty"`
 	CreatedAt      time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt      time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
+// InventoryItem представляет единицу материально-технического оборудования
 type InventoryItem struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`
 	InventoryNumber string    `gorm:"size:100;uniqueIndex;notnull" json:"inventory_number"`
@@ -118,12 +127,14 @@ type InventoryItem struct {
 	UpdatedAt       time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
+// Setting хранит ключ-значение глобальных настроек системы
 type Setting struct {
 	Key       string    `gorm:"primaryKey;size:100" json:"key"`
 	Value     string    `gorm:"type:text" json:"value"`
 	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
+// RoomBooking хранит интервал бронирования переговорной комнаты
 type RoomBooking struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	RoomCode  string    `gorm:"size:50;index;notnull" json:"room_code"`

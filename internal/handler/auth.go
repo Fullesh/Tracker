@@ -13,6 +13,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// getSessionSecret возвращает ключ для формирования подписи cookie сессии
 func getSessionSecret() []byte {
 	secret := os.Getenv("SESSION_SECRET")
 	if secret == "" {
@@ -21,6 +22,7 @@ func getSessionSecret() []byte {
 	return []byte(secret)
 }
 
+// signSessionValue подписывает имя пользователя с использованием HMAC-SHA256
 func signSessionValue(username string) string {
 	mac := hmac.New(sha256.New, getSessionSecret())
 	mac.Write([]byte(username))
@@ -28,6 +30,7 @@ func signSessionValue(username string) string {
 	return username + "." + sig
 }
 
+// parseSessionValue проверяет валидность HMAC-подписи cookie и возвращает имя пользователя
 func parseSessionValue(cookieVal string) (string, bool) {
 	parts := strings.SplitN(cookieVal, ".", 2)
 	if len(parts) != 2 {
