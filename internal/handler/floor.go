@@ -145,15 +145,70 @@ func (h *Handler) DeleteFloor(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Некорректный ID этажа", http.StatusBadRequest)
 		return
 	}
+
 	h.db.Model(&domain.Floor{}).Count(&count)
 	if count <= 1 {
 		http.Error(w, "Нельзя удалить единственный этаж", http.StatusBadRequest)
 		return
 	}
-	if err := h.db.Delete(&domain.Floor{}, floorID).Error; err != nil {
+
+	tx := h.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	var wpIDs []uint
+	if err := tx.Model(&domain.Workplace{}).
+		Where("floor_id = ?", floorID).
+		Pluck("id", &wpIDs).Error; err != nil {
+		tx.Rollback()
+		http.Error(w, "Ошибка поиска рабочих мест этажа: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if len(wpIDs) > 0 {
+		if err := tx.Model(&domain.Employee{}).
+			Where("workplace_id IN ?", wpIDs).
+			Update("workplace_id", nil).Error; err != nil {
+			tx.Rollback()
+			http.Error(w, "Ошибка отвязки сотрудников от рабочих мест: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := tx.Where("floor_id = ?", floorID).
+		Delete(&domain.Workplace{}).Error; err != nil {
+		tx.Rollback()
+		http.Error(w, "Ошибка удаления рабочих мест этажа: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Where("floor_id = ?", floorID).
+		Delete(&domain.Wall{}).Error; err != nil {
+		tx.Rollback()
+		http.Error(w, "Ошибка удаления стен этажа: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := tx.Where("floor_id = ?", floorID).
+		Delete(&domain.RoomLabel{}).Error; err != nil {
+		tx.Rollback()
+		http.Error(w, "Ошибка удаления меток этажа: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Delete(&domain.Floor{}, floorID).Error; err != nil {
+		tx.Rollback()
 		http.Error(w, "Ошибка при удалении этажа: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if err := tx.Commit().Error; err != nil {
+		http.Error(w, "Ошибка фиксации транзакции: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
