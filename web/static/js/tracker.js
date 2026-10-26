@@ -5287,6 +5287,590 @@
         connect();
     }
 
+    // ---------- Модуль OCR распознавания накладных (МТО) ----------
+    function initOcrInvoiceModal() {
+        const openBtn = document.getElementById('openOcrModalBtn');
+        const modal = document.getElementById('ocrModal');
+        if (!modal) return;
+
+        const dropzone = document.getElementById('ocrDropzone');
+        const fileInput = document.getElementById('ocrFileInput');
+        const selectFileBtn = document.getElementById('ocrSelectFileBtn');
+        const demoSampleBtn = document.getElementById('ocrDemoSampleBtn');
+
+        const toggleTextInputBtn = document.getElementById('ocrToggleTextInputBtn');
+        const textInputWrap = document.getElementById('ocrTextInputWrap');
+        const rawTextInput = document.getElementById('ocrRawTextInput');
+        const parseRawTextBtn = document.getElementById('ocrParseRawTextBtn');
+
+        const uploadSection = document.getElementById('ocrUploadSection');
+        const progressCard = document.getElementById('ocrProgressCard');
+        const progressStatus = document.getElementById('ocrProgressStatus');
+        const progressBarFill = document.getElementById('ocrProgressBarFill');
+        const progressDetail = document.getElementById('ocrProgressDetail');
+
+        const resultsSection = document.getElementById('ocrResultsSection');
+        const invoiceNumInput = document.getElementById('ocrInvoiceNumberInput');
+        const targetWpSelect = document.getElementById('ocrTargetWorkplaceSelect');
+        const detectedCountEl = document.getElementById('ocrDetectedCount');
+        const tableBody = document.getElementById('ocrItemsTableBody');
+        const selectAllCb = document.getElementById('ocrSelectAllItems');
+        const addRowBtn = document.getElementById('ocrAddRowBtn');
+        const reuploadBtn = document.getElementById('ocrReuploadBtn');
+        const submitBatchBtn = document.getElementById('ocrSubmitBatchBtn');
+        const submitCountBadge = document.getElementById('ocrSubmitCountBadge');
+
+        let parsedItems = [];
+
+        const categoryMap = {
+            'Монитор': 'MON',
+            'Компьютер': 'PC',
+            'Ноутбук': 'PC',
+            'Периферия': 'DEV',
+            'Оргтехника': 'DEV',
+            'Сетевое оборудование': 'NET',
+            'Мебель': 'FURN',
+            'Другое': 'DEV'
+        };
+
+        const demoInvoiceSample = 'Универсальный передаточный документ (УПД) № 108 от 24.10.2026\n' +
+            'Поставщик: ООО "ИТ-Снабжение", ИНН 7701445566, КПП 770101001\n' +
+            'Покупатель: ООО "ПТрэкер Корпорейшн", ИНН 7707889900\n' +
+            'Основание: Договор поставки оборудования № ДКП-2026/10\n\n' +
+            '1. Монитор 27" Dell UltraSharp U2722D IPS 2560x1440 - 2 шт. (SN: CN0987654)\n' +
+            '2. Ноутбук Lenovo ThinkPad T14 Gen 3 Core i7 16GB SSD 512GB - 1 шт. (SN: PF39X812)\n' +
+            '3. Мышь беспроводная оптическая Logitech Signature M650 L Black - 3 шт.\n' +
+            '4. Клавиатура проводная USB Logitech K120 - 3 шт.\n' +
+            '5. Коммутатор управляемый MikroTik CRS326-24G-2S+RM - 1 шт. (SN: 98AB76CD)\n' +
+            '6. Кресло офисное эргономичное черное Metta Комплект 18 - 2 шт.\n' +
+            'Всего наименований: 6, на сумму 312 400.00 руб. Без НДС.';
+
+        function populateWorkplaces() {
+            if (!targetWpSelect) return;
+            const currentVal = targetWpSelect.value || 'STOCK';
+            targetWpSelect.innerHTML = '<option value="STOCK">Склад (STOCK)</option>';
+            if (state.floors && Array.isArray(state.floors)) {
+                state.floors.forEach(fl => {
+                    if (fl.workplaces && Array.isArray(fl.workplaces)) {
+                        fl.workplaces.forEach(wp => {
+                            if (wp.code) {
+                                const opt = document.createElement('option');
+                                opt.value = wp.code;
+                                opt.textContent = `${wp.code} (${fl.name || 'Этаж'})`;
+                                targetWpSelect.appendChild(opt);
+                            }
+                        });
+                    }
+                });
+            }
+            targetWpSelect.value = currentVal;
+        }
+
+        function openModal() {
+            populateWorkplaces();
+            showStep('upload');
+            parsedItems = [];
+            renderTable();
+            modal.hidden = false;
+        }
+
+        function closeModal() {
+            modal.hidden = true;
+        }
+
+        if (openBtn) {
+            openBtn.addEventListener('click', openModal);
+        }
+
+        modal.querySelectorAll('[data-close]').forEach((el) => {
+            el.addEventListener('click', closeModal);
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !modal.hidden) {
+                closeModal();
+            }
+        });
+
+        function showStep(step) {
+            if (step === 'upload') {
+                uploadSection.hidden = false;
+                progressCard.hidden = true;
+                resultsSection.hidden = true;
+                submitBatchBtn.disabled = true;
+            } else if (step === 'progress') {
+                uploadSection.hidden = true;
+                progressCard.hidden = false;
+                resultsSection.hidden = true;
+                submitBatchBtn.disabled = true;
+            } else if (step === 'results') {
+                uploadSection.hidden = true;
+                progressCard.hidden = true;
+                resultsSection.hidden = false;
+                updateSubmitButton();
+            }
+        }
+
+        function updateProgress(title, percent, detail = '') {
+            if (progressStatus) progressStatus.textContent = title;
+            if (progressBarFill) progressBarFill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+            if (progressDetail) progressDetail.textContent = detail;
+        }
+
+        if (dropzone) {
+            ['dragenter', 'dragover'].forEach(name => {
+                dropzone.addEventListener(name, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.add('is-dragover');
+                });
+            });
+
+            ['dragleave', 'drop'].forEach(name => {
+                dropzone.addEventListener(name, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.remove('is-dragover');
+                });
+            });
+
+            dropzone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                if (dt && dt.files && dt.files.length > 0) {
+                    handleFile(dt.files[0]);
+                }
+            });
+
+            dropzone.addEventListener('click', (e) => {
+                if (e.target !== demoSampleBtn && e.target !== selectFileBtn) {
+                    if (fileInput) fileInput.click();
+                }
+            });
+        }
+
+        if (selectFileBtn && fileInput) {
+            selectFileBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files && fileInput.files.length > 0) {
+                    handleFile(fileInput.files[0]);
+                }
+            });
+        }
+
+        if (demoSampleBtn) {
+            demoSampleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                processRecognizedText(demoInvoiceSample);
+            });
+        }
+
+        if (toggleTextInputBtn && textInputWrap) {
+            toggleTextInputBtn.addEventListener('click', () => {
+                textInputWrap.hidden = !textInputWrap.hidden;
+            });
+        }
+
+        if (parseRawTextBtn && rawTextInput) {
+            parseRawTextBtn.addEventListener('click', () => {
+                const text = rawTextInput.value.trim();
+                if (!text) {
+                    showToast('Введите текст накладной для распознавания', 'error');
+                    return;
+                }
+                processRecognizedText(text);
+            });
+        }
+
+        if (reuploadBtn) {
+            reuploadBtn.addEventListener('click', () => {
+                showStep('upload');
+            });
+        }
+
+        async function handleFile(file) {
+            if (!file) return;
+
+            showStep('progress');
+            updateProgress('Подготовка изображения...', 10, file.name);
+
+            try {
+                if (typeof Tesseract === 'undefined') {
+                    updateProgress('Загрузка движка распознавания...', 25, 'Подключение Tesseract.js WebAssembly');
+                    await new Promise((resolve, reject) => {
+                        const s = document.createElement('script');
+                        s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+                        s.onload = resolve;
+                        s.onerror = () => reject(new Error('Не удалось загрузить библиотеку Tesseract.js'));
+                        document.head.appendChild(s);
+                    });
+                }
+
+                updateProgress('Инициализация языковой модели (rus+eng)...', 40);
+
+                const worker = await Tesseract.createWorker(['rus', 'eng'], 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            const pct = 40 + Math.round((m.progress || 0) * 55);
+                            updateProgress(`Распознавание текста: ${Math.round((m.progress || 0) * 100)}%`, pct, 'Обработка строк и таблиц накладной');
+                        }
+                    }
+                });
+
+                const ret = await worker.recognize(file);
+                await worker.terminate();
+
+                const text = (ret && ret.data && ret.data.text) ? ret.data.text : '';
+                updateProgress('Синтаксический анализ таблицы накладной...', 98);
+
+                processRecognizedText(text);
+            } catch (err) {
+                console.error('Ошибка OCR распознавания:', err);
+                showToast('Ошибка распознавания: ' + err.message + '. Можно вставить текст накладной вручную.', 'error');
+                showStep('upload');
+                if (textInputWrap) textInputWrap.hidden = false;
+            }
+        }
+
+        function processRecognizedText(rawText) {
+            if (!rawText || !rawText.trim()) {
+                showToast('Не удалось извлечь текст из документа. Попробуйте более четкий скан или вставьте текст.', 'error');
+                showStep('upload');
+                return;
+            }
+
+            // Поиск номера накладной
+            let invoiceNum = '';
+            const invMatch = rawText.match(/(?:универсальный\s+передаточный\s+документ(?:\s*\([а-яa-z]+\))?|упд|товарная\s+накладная|накладная|счет[- ]фактура|счет|акт)\s*(?:на\s+оплату\s*)?(?:[№#]\s*)?([A-Za-zА-Яа-я0-9\-\/]+(?:\s+от\s+[0-9\.\-]+)?)/i)
+                || rawText.match(/(?:[№#]\s*)([A-Za-zА-Яа-я0-9\-\/]+(?:\s+от\s+[0-9\.\-]+)?)/i);
+            if (invMatch) {
+                invoiceNum = invMatch[0].replace(/\s+/g, ' ').trim();
+            }
+            if (invoiceNumInput) {
+                invoiceNumInput.value = invoiceNum;
+            }
+
+            const lines = rawText.split('\n');
+            const items = [];
+
+            const stopWords = [
+                'универсальный передаточный', 'упд', 'товарная накладная', 'счет-фактура', 'счет на оплату',
+                'поставщик', 'покупатель', 'грузополучатель', 'грузоотправитель', 'плательщик',
+                'основание', 'договор', 'контракт', 'спецификация',
+                'инн', 'кпп', 'банк', 'бик', 'р/с', 'к/с', 'адрес', 'телефон',
+                'всего к оплате', 'всего наименований', 'всего отпущено', 'сумма ндс', 'без ндс', 'в том числе ндс',
+                'итого', 'руководитель', 'главный бухгалтер', 'отпустил', 'получил', 'принял', 'м.п.', 'страница', 'подпись'
+            ];
+
+            lines.forEach(rawLine => {
+                const trimmedRaw = rawLine.trim();
+                if (trimmedRaw.length < 5) return;
+
+                const lower = trimmedRaw.toLowerCase();
+
+                // Фильтр служебных шапок, реквизитов и оснований документов
+                const isStop = stopWords.some(w => lower.startsWith(w) || lower.startsWith(w + ':') || lower.startsWith(w + ' '));
+                if (isStop) {
+                    return;
+                }
+                if (lower.startsWith('основание') || lower.startsWith('договор') || lower.startsWith('контракт') || lower.startsWith('спецификаци')) {
+                    return;
+                }
+                if (lower.startsWith('универсальный') || lower.startsWith('товарная накладная') || lower.startsWith('счет-фактура')) {
+                    return;
+                }
+
+                // Проверяем наличие номера позиции (например "1.", "2)", "3 |")
+                const hasNumberedPrefix = /^\d+[\.\)\|\-]/.test(trimmedRaw);
+
+                let line = trimmedRaw.replace(/^\s*\d+[\.\)\|\-]\s*/, '').trim();
+                if (line.length < 3) return;
+
+                // Извлечение количества
+                let qty = 1;
+                const qtyMatch = line.match(/(\d+)\s*(?:шт|штук|компл|ед|упак)/i);
+                const hasQuantityKeyword = Boolean(qtyMatch);
+                if (qtyMatch) {
+                    qty = parseInt(qtyMatch[1], 10) || 1;
+                }
+
+                // Извлечение серийного номера
+                let serial = '';
+                const snMatch = line.match(/(?:sn|s\/n|серийн\w*|артикул|арт)[\s\:\#№]*([a-zA-Z0-9\-_]+)/i);
+                if (snMatch) {
+                    serial = snMatch[1].trim();
+                }
+
+                // Очистка наименования от технических хвостов
+                let cleanName = line
+                    .replace(/\s*-\s*\d+\s*(?:шт|штук|компл|ед|упак).*/i, '')
+                    .replace(/\s*\(sn.*?\)/i, '')
+                    .replace(/\b\d+[\.,]\d{2}\s*(?:руб|р)?\b.*/i, '')
+                    .trim();
+
+                if (cleanName.length < 3) return;
+
+                const nameLower = cleanName.toLowerCase();
+                let category = 'Другое';
+                let typeCode = 'DEV';
+
+                if (nameLower.includes('монитор') || nameLower.includes('monitor') || nameLower.includes('дисплей') || nameLower.includes('экран')) {
+                    category = 'Монитор';
+                    typeCode = 'MON';
+                } else if (nameLower.includes('ноутбук') || nameLower.includes('laptop') || nameLower.includes('thinkpad') || nameLower.includes('macbook')) {
+                    category = 'Ноутбук';
+                    typeCode = 'PC';
+                } else if (nameLower.includes('компьютер') || nameLower.includes('системный блок') || nameLower.includes('пк') || nameLower.includes('моноблок')) {
+                    category = 'Компьютер';
+                    typeCode = 'PC';
+                } else if (nameLower.includes('мышь') || nameLower.includes('клавиатура') || nameLower.includes('гарнитур') || nameLower.includes('наушник') || nameLower.includes('веб-камер')) {
+                    category = 'Периферия';
+                    typeCode = 'DEV';
+                } else if (nameLower.includes('принтер') || nameLower.includes('мфу') || nameLower.includes('сканер') || nameLower.includes('ибп') || nameLower.includes('ups')) {
+                    category = 'Оргтехника';
+                    typeCode = 'DEV';
+                } else if (nameLower.includes('коммутатор') || nameLower.includes('роутер') || nameLower.includes('маршрутизатор') || nameLower.includes('switch') || nameLower.includes('router') || nameLower.includes('точка доступа') || nameLower.includes('сервер')) {
+                    category = 'Сетевое оборудование';
+                    typeCode = 'NET';
+                } else if (nameLower.includes('стол') || nameLower.includes('кресло') || nameLower.includes('стул') || nameLower.includes('тумба') || nameLower.includes('шкаф')) {
+                    category = 'Мебель';
+                    typeCode = 'FURN';
+                }
+
+                // Если строка не имеет номера позиции, не имеет единицы измерения/количества и категория "Другое" — это служебный текст, пропускаем
+                if (!hasNumberedPrefix && !hasQuantityKeyword && category === 'Другое') {
+                    return;
+                }
+
+                items.push({
+                    id: Date.now() + Math.random(),
+                    enabled: true,
+                    name: cleanName,
+                    category: category,
+                    typeCode: typeCode,
+                    quantity: qty,
+                    serial: serial
+                });
+            });
+
+            if (items.length === 0) {
+                items.push({
+                    id: Date.now(),
+                    enabled: true,
+                    name: lines[0] || 'Оборудование из накладной',
+                    category: 'Другое',
+                    typeCode: 'DEV',
+                    quantity: 1,
+                    serial: ''
+                });
+                showToast('Табличная часть не распознана однозначно. Проверьте и скорректируйте позиции.', 'info');
+            } else {
+                showToast(`Распознано позиций: ${items.length}`, 'success');
+            }
+
+            parsedItems = items;
+            renderTable();
+            showStep('results');
+        }
+
+        function renderTable() {
+            if (!tableBody) return;
+            tableBody.innerHTML = '';
+
+            if (detectedCountEl) {
+                detectedCountEl.textContent = String(parsedItems.length);
+            }
+
+            parsedItems.forEach((item, idx) => {
+                const tr = document.createElement('tr');
+                if (!item.enabled) tr.className = 'is-excluded';
+
+                const tdCb = document.createElement('td');
+                tdCb.style.textAlign = 'center';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = item.enabled;
+                cb.onchange = () => {
+                    item.enabled = cb.checked;
+                    tr.className = item.enabled ? '' : 'is-excluded';
+                    updateSubmitButton();
+                };
+                tdCb.appendChild(cb);
+                tr.appendChild(tdCb);
+
+                const tdName = document.createElement('td');
+                const inName = document.createElement('input');
+                inName.className = 'ocr-table-input';
+                inName.value = item.name;
+                inName.required = true;
+                inName.oninput = () => { item.name = inName.value.trim(); updateSubmitButton(); };
+                tdName.appendChild(inName);
+                tr.appendChild(tdName);
+
+                const tdCat = document.createElement('td');
+                const selCat = document.createElement('select');
+                selCat.className = 'ocr-table-input';
+                const categories = ['Монитор', 'Компьютер', 'Ноутбук', 'Периферия', 'Оргтехника', 'Сетевое оборудование', 'Мебель', 'Другое'];
+                categories.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat;
+                    if (cat === item.category) opt.selected = true;
+                    selCat.appendChild(opt);
+                });
+                selCat.onchange = () => {
+                    item.category = selCat.value;
+                    item.typeCode = categoryMap[item.category] || 'DEV';
+                    inType.value = item.typeCode;
+                };
+                tdCat.appendChild(selCat);
+                tr.appendChild(tdCat);
+
+                const tdType = document.createElement('td');
+                const inType = document.createElement('input');
+                inType.className = 'ocr-table-input';
+                inType.value = item.typeCode;
+                inType.maxLength = 6;
+                inType.oninput = () => { item.typeCode = inType.value.toUpperCase().trim(); };
+                tdType.appendChild(inType);
+                tr.appendChild(tdType);
+
+                const tdQty = document.createElement('td');
+                const inQty = document.createElement('input');
+                inQty.className = 'ocr-table-input';
+                inQty.type = 'number';
+                inQty.min = '1';
+                inQty.max = '50';
+                inQty.value = String(item.quantity || 1);
+                inQty.oninput = () => {
+                    item.quantity = parseInt(inQty.value, 10) || 1;
+                    updateSubmitButton();
+                };
+                tdQty.appendChild(inQty);
+                tr.appendChild(tdQty);
+
+                const tdSn = document.createElement('td');
+                const inSn = document.createElement('input');
+                inSn.className = 'ocr-table-input';
+                inSn.placeholder = 'S/N...';
+                inSn.value = item.serial || '';
+                inSn.oninput = () => { item.serial = inSn.value.trim(); };
+                tdSn.appendChild(inSn);
+                tr.appendChild(tdSn);
+
+                const tdDel = document.createElement('td');
+                tdDel.style.textAlign = 'center';
+                const delBtn = document.createElement('button');
+                delBtn.className = 'ocr-row-del-btn';
+                delBtn.type = 'button';
+                delBtn.innerHTML = '&times;';
+                delBtn.title = 'Удалить строку';
+                delBtn.onclick = () => {
+                    parsedItems.splice(idx, 1);
+                    renderTable();
+                };
+                tdDel.appendChild(delBtn);
+                tr.appendChild(tdDel);
+
+                tableBody.appendChild(tr);
+            });
+
+            updateSubmitButton();
+        }
+
+        if (selectAllCb) {
+            selectAllCb.onchange = () => {
+                const checked = selectAllCb.checked;
+                parsedItems.forEach(it => { it.enabled = checked; });
+                renderTable();
+            };
+        }
+
+        if (addRowBtn) {
+            addRowBtn.onclick = () => {
+                parsedItems.push({
+                    id: Date.now(),
+                    enabled: true,
+                    name: 'Новое оборудование',
+                    category: 'Другое',
+                    typeCode: 'DEV',
+                    quantity: 1,
+                    serial: ''
+                });
+                renderTable();
+            };
+        }
+
+        function updateSubmitButton() {
+            if (!submitBatchBtn) return;
+            const enabledItems = parsedItems.filter(it => it.enabled && it.name.trim() !== '');
+            const totalCount = enabledItems.reduce((acc, it) => acc + (it.quantity || 1), 0);
+
+            if (submitCountBadge) {
+                submitCountBadge.textContent = String(totalCount);
+            }
+            submitBatchBtn.disabled = totalCount === 0;
+        }
+
+        if (submitBatchBtn) {
+            submitBatchBtn.onclick = async () => {
+                const enabledItems = parsedItems.filter(it => it.enabled && it.name.trim() !== '');
+                if (enabledItems.length === 0) {
+                    showToast('Нет выбранных позиций для создания', 'error');
+                    return;
+                }
+
+                submitBatchBtn.disabled = true;
+                const origText = submitBatchBtn.textContent;
+                submitBatchBtn.textContent = 'Создание карточек...';
+
+                const targetWp = targetWpSelect ? targetWpSelect.value : 'STOCK';
+                const invoiceNum = invoiceNumInput ? invoiceNumInput.value.trim() : '';
+
+                const payload = {
+                    invoice_number: invoiceNum,
+                    items: enabledItems.map(it => ({
+                        name: it.name,
+                        category: it.category,
+                        type_code: it.typeCode,
+                        quantity: Number(it.quantity) || 1,
+                        workplace_code: targetWp,
+                        notes: it.serial ? `S/N: ${it.serial}` : ''
+                    }))
+                };
+
+                try {
+                    const resp = await fetch('/api/inventory/batch-create/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!resp.ok) {
+                        const txt = await resp.text();
+                        throw new Error(txt || 'Ошибка сервера при пакетном создании');
+                    }
+
+                    const data = await resp.json();
+                    closeModal();
+                    showToast(`Успешно создано ${data.count || enabledItems.length} карточек инвентаря`, 'success');
+                    if (typeof loadInventory === 'function') {
+                        await loadInventory();
+                    }
+                    if (typeof render === 'function') {
+                        render();
+                    }
+                } catch (err) {
+                    console.error('Ошибка сохранения накладной:', err);
+                    showToast('Ошибка: ' + err.message, 'error');
+                } finally {
+                    submitBatchBtn.disabled = false;
+                    submitBatchBtn.textContent = origText;
+                    updateSubmitButton();
+                }
+            };
+        }
+    }
+
     initThemeToggle();
     initCookieBanner();
     initPingerModal();
@@ -5295,6 +5879,7 @@
     initTaskScreenshot();
     initImageViewerModal();
     initRoomBooking();
+    initOcrInvoiceModal();
     initTaskEvents();
     if (state.auth && state.auth.can_pinger) {
         loadPingerStatus();

@@ -3397,6 +3397,339 @@ html.theme-transitioning *::after {
     border-color: #2b2e38;
 }
 
+/* =========================================================
+   Модуль OCR распознавания накладных (МТО)
+   ========================================================= */
+
+.ocr-modal-dialog {
+    max-width: 960px;
+    width: 95vw;
+}
+
+.ocr-modal__header-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.ocr-modal__badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    background: rgba(0, 119, 255, .12);
+    color: var(--link);
+    border: 1px solid rgba(0, 119, 255, .25);
+}
+
+.ocr-dropzone {
+    border: 2px dashed var(--line);
+    border-radius: var(--radius-m);
+    padding: 40px 24px;
+    text-align: center;
+    background: var(--bg-control);
+    transition: all .2s ease;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.ocr-dropzone:hover,
+.ocr-dropzone.is-dragover {
+    border-color: var(--link);
+    background: rgba(0, 119, 255, .05);
+}
+
+.ocr-dropzone__icon {
+    color: var(--text-secondary);
+    transition: transform .2s ease, color .2s ease;
+}
+
+.ocr-dropzone:hover .ocr-dropzone__icon {
+    transform: translateY(-2px);
+    color: var(--link);
+}
+
+.ocr-dropzone__text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ocr-dropzone__text strong {
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.ocr-dropzone__text span {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.ocr-dropzone__actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.ocr-text-fallback {
+    margin-top: 16px;
+    text-align: center;
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: var(--link);
+    cursor: pointer;
+    font-size: 13px;
+    text-decoration: underline;
+    padding: 4px;
+}
+
+.btn-link:hover {
+    color: #0055cc;
+}
+
+.ocr-text-input-wrap {
+    margin-top: 12px;
+    text-align: left;
+}
+
+/* Индикатор прогресса OCR */
+.ocr-progress-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 24px;
+    border-radius: var(--radius-m);
+    background: var(--bg-control);
+    border: 1px solid var(--line);
+    margin: 16px 0;
+}
+
+.ocr-progress-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgba(0, 119, 255, .2);
+    border-top-color: var(--link);
+    border-radius: 50%;
+    animation: ocrSpin 1s infinite linear;
+    flex-shrink: 0;
+}
+
+@keyframes ocrSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.ocr-progress-info {
+    flex: 1;
+}
+
+.ocr-progress-title {
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.ocr-progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: rgba(0, 0, 0, .08);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+[data-theme="dark"] .ocr-progress-bar-bg,
+.theme-dark .ocr-progress-bar-bg {
+    background: rgba(255, 255, 255, .1);
+}
+
+.ocr-progress-bar-fill {
+    height: 100%;
+    background: var(--link);
+    border-radius: 999px;
+    transition: width .2s ease;
+}
+
+.ocr-progress-detail {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Секция результатов распознавания */
+.ocr-results-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.ocr-invoice-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.field--inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.field--inline .field__label {
+    white-space: nowrap;
+    margin-bottom: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.input--sm {
+    height: 32px;
+    padding: 4px 10px;
+    font-size: 13px;
+    border-radius: var(--radius-s);
+}
+
+.ocr-results-stats {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.ocr-results-stats strong {
+    color: var(--text-primary);
+    font-size: 15px;
+}
+
+.ocr-table-container {
+    max-height: 380px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    background: var(--bg-surface);
+}
+
+.ocr-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.ocr-items-table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-control);
+    padding: 10px 8px;
+    font-weight: 700;
+    text-align: left;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--line);
+    z-index: 2;
+}
+
+.ocr-items-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+}
+
+.ocr-items-table tr:hover {
+    background: rgba(0, 0, 0, .02);
+}
+
+[data-theme="dark"] .ocr-items-table tr:hover,
+.theme-dark .ocr-items-table tr:hover {
+    background: rgba(255, 255, 255, .03);
+}
+
+.ocr-items-table tr.is-excluded {
+    opacity: .45;
+    background: rgba(0, 0, 0, .04);
+}
+
+.ocr-table-input {
+    width: 100%;
+    height: 30px;
+    padding: 3px 8px;
+    font-size: 13px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    transition: all .15s ease;
+}
+
+.ocr-table-input:hover {
+    border-color: var(--line);
+    background: var(--bg-surface);
+}
+
+.ocr-table-input:focus {
+    border-color: var(--link);
+    background: var(--bg-surface);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 119, 255, .2);
+}
+
+.ocr-table-footer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+.ocr-row-del-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    line-height: 1;
+}
+
+.ocr-row-del-btn:hover {
+    color: var(--ya-red);
+    background: rgba(252, 63, 29, .1);
+}
+
+/* Тёмная тема для OCR */
+[data-theme="dark"] .ocr-dropzone,
+.theme-dark .ocr-dropzone,
+[data-theme="dark"] .ocr-progress-card,
+.theme-dark .ocr-progress-card {
+    background: #14161b;
+    border-color: #2b2e38;
+}
+
+[data-theme="dark"] .ocr-items-table th,
+.theme-dark .ocr-items-table th {
+    background: #1a1d24;
+    border-color: #2b2e38;
+}
+
+[data-theme="dark"] .ocr-table-container,
+.theme-dark .ocr-table-container {
+    background: #16181f;
+    border-color: #2b2e38;
+}
+
+[data-theme="dark"] .ocr-items-table td,
+.theme-dark .ocr-items-table td {
+    border-color: #2b2e38;
+}
+
+
 
 
 
