@@ -18,11 +18,46 @@
     const AVATAR_COLORS = ['#0077ff', '#fc3f1d', '#6b3fd4', '#24803c', '#ff9900', '#00a3bf'];
 
     const byId = (list) => Object.fromEntries((list || []).filter(Boolean).map((x) => [String(x.id), x]));
-    const assigneesById = byId(CONFIG.assignees);
+    let assigneesById = byId(CONFIG.assignees);
+
+    function getAssignees() {
+        const list = [];
+        const seen = new Set();
+        const empList = (typeof state !== 'undefined' && state.employees) ? state.employees : (CONFIG.employees || []);
+
+        empList.forEach((emp) => {
+            const pos = (emp.position || '').toLowerCase();
+            const dept = (emp.department || '').toLowerCase();
+            const isITorMTO = pos.includes('мто') || dept.includes('мто') ||
+                              pos.includes('администратор') || pos.includes('сисадмин') ||
+                              pos.includes('инженер') || pos.includes('devops') ||
+                              dept.includes('it') || dept.includes('ит') || dept.includes('инфраструктур');
+
+            if (isITorMTO && emp.full_name) {
+                seen.add(String(emp.id));
+                seen.add(emp.full_name.toLowerCase());
+                list.push({
+                    id: String(emp.id),
+                    name: emp.full_name,
+                    role: emp.position || emp.department || 'Исполнитель'
+                });
+            }
+        });
+
+        (CONFIG.assignees || []).forEach((def) => {
+            if (!seen.has(String(def.id)) && !seen.has(def.name.toLowerCase())) {
+                list.push(def);
+            }
+        });
+
+        assigneesById = byId(list);
+        return list;
+    }
+
     const prioritiesById = byId(CONFIG.priorities);
     const severitiesById = byId(CONFIG.severities);
     const floorsById = byId(CONFIG.floors);
-    const workplaces = (CONFIG.floors || []).flatMap((f) => f.workplaces || []);
+    const workplaces = (CONFIG.floors || []).flatMap((f) => (f.workplaces || []).map(w => ({ ...w, floor_name: f.name || `Этаж ${f.id}`, floor_id: f.id })));
     const workplacesById = byId(workplaces);
 
     const priorityOrder = Object.fromEntries(CONFIG.priorities.map((p, i) => [p.id, i]));
@@ -67,7 +102,7 @@
         selectedPlace: null,
         employees: CONFIG.employees || [],
         departments: CONFIG.departments || [],
-        workplaces: CONFIG.workplaces || [],
+        workplaces: workplaces,
         inventory: [],
         inventoryLoaded: false,
         auth: CONFIG.auth || { is_authenticated: false, username: '', is_admin: false },
@@ -163,9 +198,12 @@
     }
 
     function avatar(assigneeId) {
+        if (!assigneesById[assigneeId]) {
+            assigneesById = byId(getAssignees());
+        }
         const user = assigneesById[assigneeId];
         if (!user) return el('span', { class: 'avatar avatar--empty', title: 'Не назначен', text: '?' });
-        const color = AVATAR_COLORS[(Number(user.id) - 1) % AVATAR_COLORS.length];
+        const color = AVATAR_COLORS[(Math.abs(Number(user.id) || 1) - 1) % AVATAR_COLORS.length];
         return el('span', { class: 'avatar', title: user.role ? `${user.name} · ${user.role}` : user.name, style: `background:${color}`, text: initials(user.name) });
     }
 
@@ -534,7 +572,7 @@
 
     function renderPeople() {
         peopleEl.innerHTML = '';
-        CONFIG.assignees.forEach((u) => {
+        getAssignees().forEach((u) => {
             const id = String(u.id);
             const count = state.tasks.filter((t) => t.assignee === id && isOpen(t)).length;
             peopleEl.append(el('li', {
@@ -1297,7 +1335,7 @@
     const saveBtn = document.getElementById('saveBtn');
     const deleteBtn = document.getElementById('deleteBtn');
 
-    fillSelect(form.assignee, [{ id: '', name: 'Не назначен' }, ...CONFIG.assignees]);
+    fillSelect(form.assignee, [{ id: '', name: 'Не назначен' }, ...getAssignees()]);
     fillSelect(form.status, CONFIG.statuses);
     fillSelect(form.priority, CONFIG.priorities);
     fillSelect(form.severity, CONFIG.severities);
@@ -1314,6 +1352,7 @@
 
     function openModal(task, preset = {}) {
         form.reset();
+        fillSelect(form.assignee, [{ id: '', name: 'Не назначен' }, ...getAssignees()]);
         const isEdit = Boolean(task);
         modalTitle.textContent = isEdit ? `${KEY_PREFIX}-${task.id}` : 'Новая задача';
         saveBtn.textContent = isEdit ? 'Сохранить' : 'Создать';
@@ -1486,7 +1525,13 @@
     const filterSeverity = document.getElementById('filterSeverity');
     const searchInput = document.getElementById('searchInput');
 
-    fillSelect(filterAssignee, [...CONFIG.assignees, { id: 'none', name: 'Не назначен' }], { keepFirst: true });
+    function updateAssigneeFilters() {
+        if (!filterAssignee) return;
+        const currentVal = filterAssignee.value;
+        fillSelect(filterAssignee, [...getAssignees(), { id: 'none', name: 'Не назначен' }], { keepFirst: true });
+        filterAssignee.value = currentVal;
+    }
+    updateAssigneeFilters();
     fillSelect(filterPriority, CONFIG.priorities, { keepFirst: true });
     fillSelect(filterSeverity, CONFIG.severities, { keepFirst: true });
 
@@ -1986,12 +2031,20 @@
                 el('option', { value: '', text: '— Не задано —' })
             ]);
 
+            const currentWpId = emp.workplace_id || (emp.workplace ? emp.workplace.id : null);
+
             // Группируем по этажам
             const floorsGrouped = {};
-            state.workplaces.forEach((w) => {
-                const fname = w.floor_name || `Этаж ${w.floor_id}`;
+            (CONFIG.floors || state.floors || []).forEach((fl) => {
+                const fname = fl.name || `Этаж ${fl.id}`;
                 if (!floorsGrouped[fname]) floorsGrouped[fname] = [];
-                floorsGrouped[fname].push(w);
+                (fl.workplaces || []).forEach((w) => {
+                    floorsGrouped[fname].push({
+                        ...w,
+                        floor_id: w.floor_id || fl.id,
+                        floor_name: fname
+                    });
+                });
             });
             Object.entries(floorsGrouped).forEach(([fname, wps]) => {
                 const optgroup = el('optgroup', { label: fname });
@@ -2000,7 +2053,7 @@
                         value: String(w.id),
                         text: `${w.code}${w.room ? ' · ' + w.room : ''}${w.label ? ' · ' + w.label : ''}`.trim()
                     });
-                    if (emp.workplace && String(emp.workplace.id) === String(w.id)) {
+                    if (currentWpId && String(currentWpId) === String(w.id)) {
                         opt.selected = true;
                     }
                     optgroup.appendChild(opt);
@@ -2246,6 +2299,8 @@
                         initEmployeeFilters();
                     }
                     populateCreatorList();
+                    updateAssigneeFilters();
+                    renderPeople();
                     render();
                     closeEmployeeModal();
                     showToast(isNew ? 'Сотрудник успешно создан' : 'Изменения успешно сохранены');
