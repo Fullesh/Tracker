@@ -2,12 +2,46 @@ package handler
 
 import (
 	"PTracker/internal/domain"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+func getSessionSecret() []byte {
+	secret := os.Getenv("SESSION_SECRET")
+	if secret == "" {
+		secret = "ptracker-default-secure-cookie-secret-key-32b"
+	}
+	return []byte(secret)
+}
+
+func signSessionValue(username string) string {
+	mac := hmac.New(sha256.New, getSessionSecret())
+	mac.Write([]byte(username))
+	sig := hex.EncodeToString(mac.Sum(nil))
+	return username + "." + sig
+}
+
+func parseSessionValue(cookieVal string) (string, bool) {
+	parts := strings.SplitN(cookieVal, ".", 2)
+	if len(parts) != 2 {
+		return "", false
+	}
+	username, sig := parts[0], parts[1]
+	mac := hmac.New(sha256.New, getSessionSecret())
+	mac.Write([]byte(username))
+	expectedSig := hex.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(sig), []byte(expectedSig)) {
+		return "", false
+	}
+	return username, true
+}
 
 type loginPayload struct {
 	Username string
@@ -35,9 +69,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_user",
-		Value:    user.Username,
+		Value:    signSessionValue(user.Username),
 		Path:     "/",
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	})
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
@@ -58,8 +93,16 @@ func (h *Handler) currentAuth(r *http.Request) map[string]any {
 			"is_admin":         false,
 		}
 	}
+	username, ok := parseSessionValue(cookie.Value)
+	if !ok || username == "" {
+		return map[string]any{
+			"is_authenticated": false,
+			"username":         "",
+			"is_admin":         false,
+		}
+	}
 	var user domain.User
-	if err := h.db.Preload("Employee").Where("username = ?", cookie.Value).First(&user).Error; err == nil {
+	if err := h.db.Preload("Employee").Where("username = ?", username).First(&user).Error; err == nil {
 		empName := ""
 		var wpID *uint
 		isMTO := false
@@ -136,8 +179,12 @@ func (h *Handler) currentUser(r *http.Request) *domain.User {
 	if err != nil || cookie.Value == "" {
 		return nil
 	}
+	username, ok := parseSessionValue(cookie.Value)
+	if !ok || username == "" {
+		return nil
+	}
 	var user domain.User
-	if err := h.db.Where("username = ?", cookie.Value).First(&user).Error; err == nil {
+	if err := h.db.Where("username = ?", username).First(&user).Error; err == nil {
 		return &user
 	}
 	return nil
