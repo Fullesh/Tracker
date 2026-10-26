@@ -207,8 +207,13 @@ func (h *Handler) DeleteInventoryItem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Некорректный ID оборудования", http.StatusBadRequest)
 		return
 	}
-	if err := h.db.Delete(&domain.InventoryItem{}, inventoryID).Error; err != nil {
-		http.Error(w, "Ошибка при удалении оборудования: "+err.Error(), http.StatusInternalServerError)
+	res := h.db.Delete(&domain.InventoryItem{}, inventoryID)
+	if res.Error != nil {
+		http.Error(w, "Ошибка при удалении оборудования: "+res.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+	if res.RowsAffected == 0 {
+		http.Error(w, "Оборудование не найдено", http.StatusNotFound)
 		return
 	}
 

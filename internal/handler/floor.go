@@ -146,6 +146,12 @@ func (h *Handler) DeleteFloor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var floor domain.Floor
+	if err := h.db.First(&floor, floorID).Error; err != nil {
+		http.Error(w, "Этаж не найден", http.StatusNotFound)
+		return
+	}
+
 	h.db.Model(&domain.Floor{}).Count(&count)
 	if count <= 1 {
 		http.Error(w, "Нельзя удалить единственный этаж", http.StatusBadRequest)

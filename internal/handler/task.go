@@ -228,10 +228,12 @@ func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var task domain.Task
-	if err := h.db.First(&task, taskID).Error; err == nil {
-		for _, s := range parseScreenshotsList(task.Screenshot) {
-			deleteScreenshotFile(s)
-		}
+	if err := h.db.First(&task, taskID).Error; err != nil {
+		http.Error(w, "Задача не найдена", http.StatusNotFound)
+		return
+	}
+	for _, s := range parseScreenshotsList(task.Screenshot) {
+		deleteScreenshotFile(s)
 	}
 
 	if err := h.db.Delete(&domain.Task{}, taskID).Error; err != nil {
