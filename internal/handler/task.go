@@ -33,6 +33,17 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	payload.Title = strings.TrimSpace(payload.Title)
+	if payload.Title == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "Название задачи обязательно для заполнения",
+		})
+		return
+	}
+
 	if payload.Status == "" {
 		payload.Status = "open"
 	}
