@@ -84,7 +84,7 @@ func (h *Handler) saveUserCredentials(empID uint, username, password string) err
 func (h *Handler) GetEmployees(w http.ResponseWriter, r *http.Request) {
 	var employees []domain.Employee
 	if err := h.db.Preload("Workplace").Preload("User").Preload("InventoryItems").Order("full_name ASC").Find(&employees).Error; err != nil {
-		http.Error(w, "Ошибка полученяи сотрудников"+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Ошибка получения сотрудников"+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	auth := h.currentAuth(r)
@@ -237,6 +237,18 @@ func (h *Handler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 	if photoURL, err := saveUploadedPhoto(r, uint(emp.ID)); err == nil && photoURL != "" {
 		emp.Photo = photoURL
 	}
+
+	newWPCode := "STOCK"
+	if emp.WorkplaceID != nil && *emp.WorkplaceID > 0 {
+		var wp domain.Workplace
+		if err := h.db.First(&wp, *emp.WorkplaceID).Error; err == nil && wp.Code != "" {
+			newWPCode = strings.ToUpper(strings.TrimSpace(wp.Code))
+		}
+	}
+
+	h.db.Model(&domain.InventoryItem{}).
+		Where("employee_id = ?", emp.ID).
+		Update("workplace_code", newWPCode)
 
 	if err := h.db.Save(&emp).Error; err != nil {
 		http.Error(w, "Ошибка сохранения: "+err.Error(), http.StatusInternalServerError)
