@@ -103,11 +103,17 @@ func (h *Handler) CreateRoomBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var wp domain.Workplace
+	if err := h.db.Where("code = ?", payload.RoomCode).First(&wp).Error; err != nil {
+		http.Error(w, "Переговорная комната не найдена", http.StatusNotFound)
+		return
+	}
 	if payload.RoomName == "" {
-		var wp domain.Workplace
-		if err := h.db.Where("code = ?", payload.RoomCode).First(&wp).Error; err == nil && wp.Room != "" {
-			payload.RoomName = wp.Room
-		} else {
+		payload.RoomName = wp.Room
+		if payload.RoomName == "" {
+			payload.RoomName = wp.Label
+		}
+		if payload.RoomName == "" {
 			payload.RoomName = payload.RoomCode
 		}
 	}
@@ -231,7 +237,11 @@ func (h *Handler) QuickBookRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if payload.DurationMinutes <= 0 {
+	if payload.DurationMinutes < 0 || payload.DurationMinutes > 480 {
+		http.Error(w, "Длительность встречи должна быть от 1 до 480 минут", http.StatusBadRequest)
+		return
+	}
+	if payload.DurationMinutes == 0 {
 		payload.DurationMinutes = 15
 	}
 
@@ -254,10 +264,17 @@ func (h *Handler) QuickBookRoom(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Невозможно забронировать: время пересекается со следующей забронированной встречей", http.StatusConflict)
 		return
 	}
-	roomName := payload.RoomCode
 	var wp domain.Workplace
-	if err := h.db.Where("code = ?", payload.RoomCode).First(&wp).Error; err == nil && wp.Room != "" {
-		roomName = wp.Room
+	if err := h.db.Where("code = ?", payload.RoomCode).First(&wp).Error; err != nil {
+		http.Error(w, "Переговорная комната не найдена", http.StatusNotFound)
+		return
+	}
+	roomName := wp.Room
+	if roomName == "" {
+		roomName = wp.Label
+	}
+	if roomName == "" {
+		roomName = payload.RoomCode
 	}
 
 	booking := domain.RoomBooking{
