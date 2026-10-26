@@ -38,6 +38,7 @@ services:
       PORT: 1111
       SESSION_SECRET: ${SESSION_SECRET:-ptracker-production-cookie-secret-key-32b}
       PINGER_ENABLED: ${PINGER_ENABLED:-false}
+      FNG_API_KEY: ${FNG_API_KEY:-}
     volumes:
       - uploads_data:/app/web/static/uploads
 
