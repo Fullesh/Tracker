@@ -231,7 +231,7 @@ func (h *Handler) BatchCreateInventoryItems(w http.ResponseWriter, r *http.Reque
 	}
 
 	if len(payload.Items) == 0 {
-		http.Error(w, "Список позиция для добавления пуст", http.StatusBadRequest)
+		http.Error(w, "Список позиций для добавления пуст", http.StatusBadRequest)
 		return
 	}
 

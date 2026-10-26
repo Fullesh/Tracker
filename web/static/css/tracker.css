@@ -3147,6 +3147,8 @@ html.theme-transitioning *::after {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
     background: var(--bg-surface);
     border: 1px solid var(--line);
     border-radius: var(--radius-m);
@@ -3161,8 +3163,14 @@ html.theme-transitioning *::after {
 
 .rooms-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
     gap: 20px;
+}
+
+@media (max-width: 640px) {
+    .rooms-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .rooms-empty {

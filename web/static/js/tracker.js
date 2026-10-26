@@ -270,7 +270,7 @@
     }
 
     function placeMatchesQuery(wp, q) {
-        return [wp.id, wp.employee, wp.label, wp.room].some((s) => s && s.toLowerCase().includes(q));
+        return [wp.id, wp.employee, wp.label, wp.room].some((s) => s && String(s).toLowerCase().includes(q));
     }
 
     function filteredTasks() {
@@ -2691,6 +2691,7 @@
             setView(n.dataset.view);
         }));
     window.addEventListener('hashchange', () => {
+        closeMobileSidebar();
         state.view = parseHashView();
         if (state.view === 'inventory' && !state.inventoryLoaded) {
             loadInventory();
