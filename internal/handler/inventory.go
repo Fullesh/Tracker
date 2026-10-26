@@ -31,12 +31,12 @@ type batchInventoryItemPayload struct {
 	EmployeeID      *uint  `json:"employee_id"`
 	Notes           string `json:"notes"`
 	InventoryNumber string `json:"inventory_number"`
-	Quantity        uint   `json:"quantity"`
+	Quantity        int    `json:"quantity"`
 }
 
 type batchCreateInventoryPayload struct {
-	Name  string                      `json:"invoice_number"`
-	Items []batchInventoryItemPayload `json:"items"`
+	InvoiceNumber string                      `json:"invoice_number"`
+	Items         []batchInventoryItemPayload `json:"items"`
 }
 
 func (h *Handler) resolveWorkplaceCode(employeeID *uint, fallbackCode string) string {
@@ -215,5 +215,113 @@ func (h *Handler) DeleteInventoryItem(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
+	})
+}
+
+func (h *Handler) BatchCreateInventoryItems(w http.ResponseWriter, r *http.Request) {
+	var payload batchCreateInventoryPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Некорректный JSON в теле запроса", http.StatusBadRequest)
+		return
+	}
+
+	if len(payload.Items) == 0 {
+		http.Error(w, "Список позиция для добавления пуст", http.StatusBadRequest)
+		return
+	}
+
+	tx := h.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	var createdItems []domain.InventoryItem
+	for _, item := range payload.Items {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			continue
+		}
+		typeCode := strings.ToUpper(strings.TrimSpace(item.TypeCode))
+		if typeCode == "" {
+			typeCode = "DEV"
+		}
+		category := strings.TrimSpace(item.Category)
+		if category == "" {
+			category = "Оборудование"
+		}
+		wpCode := h.resolveWorkplaceCode(item.EmployeeID, item.WorkplaceCode)
+
+		qty := item.Quantity
+		if qty <= 0 {
+			qty = 1
+		}
+		if qty > 50 {
+			qty = 50
+		}
+
+		status := strings.TrimSpace(item.Status)
+		if status == "" {
+			if item.EmployeeID != nil && *item.EmployeeID > 0 {
+				status = "assigned"
+			} else {
+				status = "in_stock"
+			}
+		}
+
+		notes := strings.TrimSpace(item.Notes)
+		if payload.InvoiceNumber != "" {
+			if notes != "" {
+				notes = fmt.Sprintf("Накладная: %s. %s", payload.InvoiceNumber, notes)
+			} else {
+				notes = fmt.Sprintf("Накладная: %s", payload.InvoiceNumber)
+			}
+		}
+
+		for k := 0; k < qty; k++ {
+			prefix := fmt.Sprintf("INV_%s_%s", typeCode, wpCode)
+			invNumber := strings.ToUpper(strings.TrimSpace(item.InventoryNumber))
+
+			if invNumber == "" || qty > 1 {
+				var count int64
+				tx.Model(&domain.InventoryItem{}).
+					Where("inventory_number LIKE ?", prefix+"%").Count(&count)
+				invNumber = fmt.Sprintf("%s_%02d", prefix, count+1)
+			}
+
+			newItem := domain.InventoryItem{
+				InventoryNumber: invNumber,
+				Name:            name,
+				Category:        category,
+				TypeCode:        typeCode,
+				IP:              strings.TrimSpace(item.IP),
+				Status:          status,
+				WorkplaceCode:   wpCode,
+				EmployeeID:      item.EmployeeID,
+				Notes:           notes,
+			}
+
+			if err := tx.Create(&newItem).Error; err != nil {
+				tx.Rollback()
+				http.Error(w, "Ошибка сохранения инвентаря: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			createdItems = append(createdItems, newItem)
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		http.Error(w, "Ошибка фиксации транзакции: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"count":   len(createdItems),
+		"items":   createdItems,
 	})
 }
