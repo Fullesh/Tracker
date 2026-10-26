@@ -4,9 +4,34 @@ import (
 	"PTracker/internal/service"
 	"net/http"
 	"os"
+	"strings"
 
 	"gorm.io/gorm"
 )
+
+type neuteredFileSystem struct {
+	fs http.FileSystem
+}
+
+func (nfs neuteredFileSystem) Open(path string) (http.File, error) {
+	f, err := nfs.fs.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	s, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	if s.IsDir() {
+		index := strings.TrimSuffix(path, "/") + "/index.html"
+		if _, err := nfs.fs.Open(index); err != nil {
+			f.Close()
+			return nil, os.ErrNotExist
+		}
+	}
+	return f, nil
+}
 
 type Handler struct {
 	db     *gorm.DB
@@ -26,8 +51,8 @@ func (h *Handler) InitRoutes() http.Handler {
 	if _, err := os.Stat(staticDir); os.IsNotExist(err) {
 		staticDir = "../../web/static/"
 	}
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
-	mux.Handle("/media/", http.StripPrefix("/media/", http.FileServer(http.Dir(staticDir+"/uploads"))))
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(neuteredFileSystem{http.Dir(staticDir)})))
+	mux.Handle("/media/", http.StripPrefix("/media/", http.FileServer(neuteredFileSystem{http.Dir(staticDir + "/uploads")})))
 
 	// Служебный пинг
 	mux.HandleFunc("/ping", h.Ping)
