@@ -110,21 +110,38 @@
         workday: null,
     };
 
+    function deduplicateTasks(tasks) {
+        const seen = new Set();
+        return (tasks || []).filter((t) => {
+            if (!t || !t.id) return false;
+            const id = Number(t.id);
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+        });
+    }
+
     function loadTasks() {
+        let tasks = [];
         if (Array.isArray(CONFIG.tasks) && CONFIG.tasks.length > 0) {
-            return CONFIG.tasks;
+            tasks = CONFIG.tasks;
+        } else {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) tasks = JSON.parse(raw);
+            } catch (e) { /* повреждённые данные — начинаем с демо */ }
         }
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) return JSON.parse(raw);
-        } catch (e) { /* повреждённые данные — начинаем с демо */ }
-        localStorage.removeItem('ptracker.tasks.v1');
-        localStorage.removeItem('ptracker.tasks.v2');
-        localStorage.removeItem('ptracker.tasks.v3');
-        return seedTasks();
+        if (!tasks || tasks.length === 0) {
+            localStorage.removeItem('ptracker.tasks.v1');
+            localStorage.removeItem('ptracker.tasks.v2');
+            localStorage.removeItem('ptracker.tasks.v3');
+            tasks = seedTasks();
+        }
+        return deduplicateTasks(tasks);
     }
 
     function saveTasks() {
+        state.tasks = deduplicateTasks(state.tasks);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
     }
 
@@ -1432,14 +1449,20 @@
                     body: JSON.stringify(data),
                 });
                 const res = await resp.json();
-                if (res.task) {
-                    state.tasks.push(res.task);
+                const createdTask = res.task || { id: nextId(), createdAt: Date.now(), ...data };
+                const existingIdx = state.tasks.findIndex((t) => Number(t.id) === Number(createdTask.id));
+                if (existingIdx === -1) {
+                    state.tasks.push(createdTask);
                 } else {
-                    state.tasks.push({ id: nextId(), createdAt: Date.now(), ...data });
+                    Object.assign(state.tasks[existingIdx], createdTask);
                 }
             } catch (err) {
                 console.error('Ошибка создания задачи:', err);
-                state.tasks.push({ id: nextId(), createdAt: Date.now(), ...data });
+                const fallbackTask = { id: nextId(), createdAt: Date.now(), ...data };
+                const existingIdx = state.tasks.findIndex((t) => Number(t.id) === Number(fallbackTask.id));
+                if (existingIdx === -1) {
+                    state.tasks.push(fallbackTask);
+                }
             }
         }
         saveTasks();
