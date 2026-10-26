@@ -2,6 +2,7 @@ package main
 
 import (
 	"PTracker/internal/config"
+	"PTracker/internal/domain"
 	"PTracker/internal/handler"
 	"PTracker/internal/repository"
 	"PTracker/internal/seed"
@@ -9,6 +10,8 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 )
 
 func main() {
@@ -29,6 +32,17 @@ func main() {
 	// Применяем актуальные миграции (добавление новых колонок)
 	if err := repository.Migrate(db); err != nil {
 		log.Printf("Предупреждение при авто-миграции БД: %v", err)
+	}
+
+	// Автоматическое наполнение базы данных при первом запуске (если таблица пользователей пуста)
+	var userCount int64
+	if err := db.Model(&domain.User{}).Count(&userCount).Error; err == nil && userCount == 0 {
+		log.Println("База данных пуста. Запуск первичного наполнения (seed)...")
+		if err := seed.Seed(db); err != nil {
+			log.Printf("Предупреждение при первичном сидировании: %v", err)
+		} else {
+			log.Println("Первичное наполнение БД успешно завершено")
+		}
 	}
 
 	sseHub := service.NewSSEHub()
@@ -64,7 +78,13 @@ func main() {
 		}
 		return
 	}
-	port := ":1111"
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "1111"
+	}
+	if !strings.HasPrefix(port, ":") {
+		port = ":" + port
+	}
 	log.Printf("Сервер запущен на порту %s \n", port)
 	// запускаем прослушивание входящих подключений
 	// Если возникает ошибка, то log.Fatalf завершит программу
