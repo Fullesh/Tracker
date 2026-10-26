@@ -61,6 +61,15 @@ func (h *Handler) LoginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "API эндпойнт не найден или HTTP-метод не поддерживается",
+		})
+		return
+	}
 	auth := h.currentAuth(r)
 	isAuth, _ := auth["is_authenticated"].(bool)
 	if !isAuth {
