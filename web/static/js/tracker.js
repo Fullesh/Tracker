@@ -23,30 +23,34 @@
     function getAssignees() {
         const list = [];
         const seen = new Set();
-        const empList = (typeof state !== 'undefined' && state.employees) ? state.employees : (CONFIG.employees || []);
+        const configured = (typeof state !== 'undefined' && state.assignees) ? state.assignees : (CONFIG.assignees || []);
 
-        empList.forEach((emp) => {
-            const pos = (emp.position || '').toLowerCase();
-            const dept = (emp.department || '').toLowerCase();
-            const isITorMTO = pos.includes('мто') || dept.includes('мто') ||
-                              pos.includes('администратор') || pos.includes('сисадмин') ||
-                              pos.includes('инженер') || pos.includes('devops') ||
-                              dept.includes('it') || dept.includes('ит') || dept.includes('инфраструктур');
+        configured.forEach((a) => {
+            if (a && a.id) {
+                const idStr = String(a.id);
+                if (seen.has(idStr)) return;
+                seen.add(idStr);
 
-            if (isITorMTO && emp.full_name) {
-                seen.add(String(emp.id));
-                seen.add(emp.full_name.toLowerCase());
+                let photo = a.photo_url;
+                let role = a.role;
+                let name = a.name;
+
+                if (typeof state !== 'undefined' && state.employees) {
+                    const emp = state.employees.find((e) => String(e.id) === idStr || (a.employee_id && String(e.id) === String(a.employee_id)));
+                    if (emp) {
+                        if (!name) name = emp.full_name;
+                        if (!role) role = emp.position || emp.department || 'Исполнитель';
+                        if (emp.photo_url) photo = emp.photo_url;
+                    }
+                }
+
                 list.push({
-                    id: String(emp.id),
-                    name: emp.full_name,
-                    role: emp.position || emp.department || 'Исполнитель'
+                    id: idStr,
+                    employee_id: a.employee_id || (Number(a.id) || null),
+                    name: name || 'Исполнитель',
+                    role: role || 'Исполнитель',
+                    photo_url: photo || null
                 });
-            }
-        });
-
-        (CONFIG.assignees || []).forEach((def) => {
-            if (!seen.has(String(def.id)) && !seen.has(def.name.toLowerCase())) {
-                list.push(def);
             }
         });
 
@@ -101,6 +105,7 @@
         floor: String(CONFIG.floors[0]?.id || 1),
         selectedPlace: null,
         employees: CONFIG.employees || [],
+        assignees: Array.isArray(CONFIG.assignees) ? [...CONFIG.assignees] : [],
         departments: CONFIG.departments || [],
         workplaces: workplaces,
         inventory: [],
@@ -109,6 +114,7 @@
         selectedEmployee: null,
         workday: null,
     };
+    window.state = state;
 
     function deduplicateTasks(tasks) {
         const seen = new Set();
@@ -120,44 +126,31 @@
             return true;
         });
     }
+    window.renderPeople = renderPeople;
 
     function loadTasks() {
-        let tasks = [];
-        if (Array.isArray(CONFIG.tasks) && CONFIG.tasks.length > 0) {
-            tasks = CONFIG.tasks;
-        } else {
-            try {
-                const raw = localStorage.getItem(STORAGE_KEY);
-                if (raw) tasks = JSON.parse(raw);
-            } catch (e) { /* повреждённые данные — начинаем с демо */ }
-        }
-        if (!tasks || tasks.length === 0) {
+        // Очищаем устаревший локальный кэш задач, чтобы данные всегда брались строго из БД сервера
+        try {
+            localStorage.removeItem(STORAGE_KEY);
             localStorage.removeItem('ptracker.tasks.v1');
             localStorage.removeItem('ptracker.tasks.v2');
             localStorage.removeItem('ptracker.tasks.v3');
-            tasks = seedTasks();
-        }
+            localStorage.removeItem('ptracker.tasks.v4');
+        } catch (e) {}
+
+        const tasks = Array.isArray(CONFIG.tasks) ? CONFIG.tasks : [];
         return deduplicateTasks(tasks);
     }
 
     function saveTasks() {
         state.tasks = deduplicateTasks(state.tasks);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
+        try {
+            localStorage.removeItem(STORAGE_KEY);
+        } catch (e) {}
     }
 
     function seedTasks() {
-        const now = Date.now();
-        const t = (id, title, description, workplace, creator, assignee, status, priority, severity) =>
-            ({ id, title, description, workplace, creator, assignee, status, priority, severity, createdAt: now });
-        return [
-            t(1, 'Перегрев стойки R2', 'Температура на входе 34°C, сработал алерт мониторинга.', '3-07', 'Мониторинг Zabbix', '2', 'in_progress', 'blocker', 's1'),
-            t(2, 'Не печатает МФУ', 'Ошибка «Замятие бумаги», хотя бумаги внутри нет.', '5-13', 'Игорь Чепель', '1', 'open', 'high', 's2'),
-            t(3, 'Нет доступа к 1С', 'После обновления пароля не пускает в базу.', '5-04', 'Елена Петрова', '1', 'open', 'critical', 's2'),
-            t(4, 'Мерцает монитор', '', '9-05', 'Артём Семёнов', '2', 'open', 'normal', 's3'),
-            t(5, 'Не работает ВКС в «Казани»', 'Камера не определяется в Телемосте.', '9-13', 'Никита Лебедев', '2', 'review', 'high', 's3'),
-            t(6, 'Установить второй монитор', 'Запрос от директора.', '3-01', 'Виктор Макаров', '1', 'open', 'low', 's4'),
-            t(7, 'Заменить клавиатуру', '', '5-01', 'Анна Смирнова', '1', 'closed', 'low', 's4'),
-        ];
+        return [];
     }
 
     function nextId() {
@@ -218,10 +211,48 @@
         if (!assigneesById[assigneeId]) {
             assigneesById = byId(getAssignees());
         }
-        const user = assigneesById[assigneeId];
+        let user = assigneesById[assigneeId];
+        if (!user && typeof state !== 'undefined' && state.employees) {
+            const foundEmp = state.employees.find((e) => String(e.id) === String(assigneeId) || (e.full_name && e.full_name.trim().toLowerCase() === String(assigneeId).trim().toLowerCase()));
+            if (foundEmp) {
+                user = {
+                    id: String(foundEmp.id),
+                    name: foundEmp.full_name,
+                    role: foundEmp.position || foundEmp.department || 'Исполнитель',
+                    photo_url: foundEmp.photo_url || null
+                };
+            }
+        }
         if (!user) return el('span', { class: 'avatar avatar--empty', title: 'Не назначен', text: '?' });
+
+        let photo = user.photo_url;
+        if (!photo && typeof state !== 'undefined' && state.employees) {
+            const emp = state.employees.find((e) => String(e.id) === String(user.id) || (e.full_name && e.full_name.trim().toLowerCase() === String(user.name).trim().toLowerCase()));
+            if (emp && emp.photo_url) {
+                photo = emp.photo_url;
+            }
+        }
+
+        const titleText = user.role ? `${user.name} · ${user.role}` : user.name;
+        if (photo) {
+            const img = el('img', {
+                class: 'avatar avatar--photo',
+                src: photo,
+                alt: user.name,
+                title: titleText
+            });
+            img.onerror = function () {
+                const color = AVATAR_COLORS[(Math.abs(Number(user.id) || 1) - 1) % AVATAR_COLORS.length];
+                const span = el('span', { class: 'avatar', title: titleText, style: `background:${color}`, text: initials(user.name) });
+                if (img.parentNode) {
+                    img.parentNode.replaceChild(span, img);
+                }
+            };
+            return img;
+        }
+
         const color = AVATAR_COLORS[(Math.abs(Number(user.id) || 1) - 1) % AVATAR_COLORS.length];
-        return el('span', { class: 'avatar', title: user.role ? `${user.name} · ${user.role}` : user.name, style: `background:${color}`, text: initials(user.name) });
+        return el('span', { class: 'avatar', title: titleText, style: `background:${color}`, text: initials(user.name) });
     }
 
     const PRIO_ICON = {
@@ -288,6 +319,7 @@
                     (wp && placeMatchesQuery(wp, q)));
         });
     }
+    window.renderPeople = renderPeople;
 
     function worstSeverity(tasks) {
         return tasks.reduce((worst, t) =>
@@ -497,6 +529,7 @@
             boardEl.append(column);
         });
     }
+    window.renderPeople = renderPeople;
 
     function renderCard(task, { draggable = true, showPlace = true } = {}) {
         const borderCls = ['blocker', 'critical', 'high'].includes(task.priority) ? ` border-${task.priority}` : '';
@@ -586,12 +619,70 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     function renderPeople() {
+        if (!peopleEl) return;
         peopleEl.innerHTML = '';
-        getAssignees().forEach((u) => {
+        const isAdmin = Boolean(state.auth && state.auth.is_admin);
+
+        // Кнопка добавления исполнителя в заголовке секции для администратора
+        let sectionTitle = peopleEl.previousElementSibling;
+        if (sectionTitle && sectionTitle.classList.contains('sidebar__title')) {
+            sectionTitle.innerHTML = '';
+            sectionTitle.className = 'sidebar__title sidebar__title-row';
+            sectionTitle.append(el('span', { text: 'Исполнители' }));
+            if (isAdmin) {
+                sectionTitle.append(el('button', {
+                    type: 'button',
+                    class: 'assignee-add-btn',
+                    title: 'Добавить исполнителя',
+                    text: '+ Добавить',
+                    onclick: (e) => {
+                        e.stopPropagation();
+                        openAddAssigneeModal();
+                    }
+                }));
+            }
+        }
+
+        const assigneesList = getAssignees();
+        if (assigneesList.length === 0) {
+            peopleEl.append(el('li', {
+                style: 'padding: 8px 10px; font-size: 12px; color: var(--text-tertiary);',
+                text: isAdmin ? 'Нет исполнителей. Нажмите «+ Добавить»' : 'Список исполнителей пуст'
+            }));
+            return;
+        }
+
+        assigneesList.forEach((u) => {
             const id = String(u.id);
             const count = state.tasks.filter((t) => t.assignee === id && isOpen(t)).length;
+
+            const children = [
+                avatar(id),
+                el('span', { class: 'person__name' }, [
+                    document.createTextNode(u.name),
+                    u.role ? el('span', { class: 'person__role', title: u.role, text: u.role }) : null,
+                ]),
+                el('span', { class: 'person__count', text: count }),
+            ];
+
+            if (isAdmin) {
+                children.push(el('button', {
+                    type: 'button',
+                    class: 'person__delete-btn',
+                    title: `Удалить ${u.name} из исполнителей`,
+                    html: '&times;',
+                    onclick: (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Удалить «${u.name}» из списка исполнителей?`)) {
+                            deleteAssignee(id);
+                        }
+                    }
+                }));
+            }
+
             peopleEl.append(el('li', {
                 class: `person${state.filters.assignee === id ? ' person--active' : ''}`,
                 title: 'Показать задачи исполнителя',
@@ -600,16 +691,10 @@
                     filterAssignee.value = state.filters.assignee;
                     render();
                 },
-            }, [
-                avatar(id),
-                el('span', { class: 'person__name' }, [
-                    document.createTextNode(u.name),
-                    u.role ? el('span', { class: 'person__role', title: u.role, text: u.role }) : null,
-                ]),
-                el('span', { class: 'person__count', text: count }),
-            ]));
+            }, children));
         });
     }
+    window.renderPeople = renderPeople;
 
     // ---------- Карта офиса ----------
     const floorTabsEl = document.getElementById('floorTabs');
@@ -700,6 +785,7 @@
             applyMapViewBox();
         });
     }
+    window.renderPeople = renderPeople;
 
     let hoverHideTimer = null;
 
@@ -804,6 +890,7 @@
             return false;
         });
     }
+    window.renderPeople = renderPeople;
 
     function showDeskHoverCard(wp, deskNode) {
         if (!deskHoverCardEl || !officeCanvasEl) return;
@@ -942,6 +1029,7 @@
             deskHoverCardEl.classList.add('desk-hover-card--visible');
         });
     }
+    window.renderPeople = renderPeople;
 
     function positionHoverCard(deskNode) {
         if (!deskHoverCardEl || !officeCanvasEl || !deskNode) return;
@@ -1497,6 +1585,7 @@
             n.addEventListener('click', closeDeleteTaskModal);
         });
     }
+    window.renderPeople = renderPeople;
 
     if (confirmDeleteTaskBtn) {
         confirmDeleteTaskBtn.addEventListener('click', async () => {
@@ -1521,6 +1610,7 @@
             showToast(`Задача ${KEY_PREFIX}-${id} удалена`, 'success');
         });
     }
+    window.renderPeople = renderPeople;
 
     deleteBtn.addEventListener('click', () => {
         const id = Number(form.id.value);
@@ -1536,11 +1626,174 @@
                 closeDeleteTaskModal();
                 return;
             }
+            if (assigneeModal && !assigneeModal.hidden) {
+                closeAddAssigneeModal();
+                return;
+            }
             if (!modal.hidden) closeModal();
         }
     });
     window.addEventListener('scroll', hideHoverCard, { passive: true });
     window.addEventListener('resize', hideHoverCard, { passive: true });
+
+    // ---------- Модальное окно добавления исполнителя ----------
+    const assigneeModal = document.getElementById('assigneeModal');
+    const assigneeForm = document.getElementById('assigneeForm');
+    const assigneeEmployeeSelect = document.getElementById('assigneeEmployeeSelect');
+    const assigneePreviewCard = document.getElementById('assigneePreviewCard');
+    const assigneePreviewAvatar = document.getElementById('assigneePreviewAvatar');
+    const assigneePreviewName = document.getElementById('assigneePreviewName');
+    const assigneePreviewRole = document.getElementById('assigneePreviewRole');
+    const assigneePreviewDept = document.getElementById('assigneePreviewDept');
+    const assigneeSubmitBtn = document.getElementById('assigneeSubmitBtn');
+
+    function openAddAssigneeModal() {
+        if (!assigneeModal || !assigneeForm) return;
+        assigneeForm.reset();
+        if (assigneePreviewCard) assigneePreviewCard.style.display = 'none';
+        if (assigneeSubmitBtn) assigneeSubmitBtn.disabled = true;
+
+        if (assigneeEmployeeSelect) {
+            assigneeEmployeeSelect.innerHTML = '<option value="">-- Выберите сотрудника --</option>';
+            const currentAssigneeIds = new Set((getAssignees() || []).map((a) => String(a.employee_id || a.id)));
+            const emps = (state && state.employees) ? state.employees : (CONFIG.employees || []);
+
+            emps.forEach((emp) => {
+                if (currentAssigneeIds.has(String(emp.id))) {
+                    return; // Уже в списке исполнителей
+                }
+                const opt = el('option', {
+                    value: String(emp.id),
+                    text: `${emp.full_name} — ${emp.position || 'Сотрудник'}${emp.department ? ' (' + emp.department + ')' : ''}`
+                });
+                assigneeEmployeeSelect.append(opt);
+            });
+        }
+
+        assigneeModal.hidden = false;
+        if (assigneeEmployeeSelect) assigneeEmployeeSelect.focus();
+    }
+
+    function closeAddAssigneeModal() {
+        if (assigneeModal) assigneeModal.hidden = true;
+    }
+
+    if (assigneeModal) {
+        assigneeModal.querySelectorAll('[data-close]').forEach((n) => {
+            n.addEventListener('click', closeAddAssigneeModal);
+        });
+    }
+    window.renderPeople = renderPeople;
+
+    if (assigneeEmployeeSelect) {
+        assigneeEmployeeSelect.addEventListener('change', () => {
+            const empId = assigneeEmployeeSelect.value;
+            if (!empId) {
+                if (assigneePreviewCard) assigneePreviewCard.style.display = 'none';
+                if (assigneeSubmitBtn) assigneeSubmitBtn.disabled = true;
+                return;
+            }
+            const emps = (state && state.employees) ? state.employees : (CONFIG.employees || []);
+            const emp = emps.find((e) => String(e.id) === empId);
+            if (emp) {
+                if (assigneePreviewCard) assigneePreviewCard.style.display = 'flex';
+                if (assigneePreviewAvatar) {
+                    assigneePreviewAvatar.innerHTML = '';
+                    if (emp.photo_url) {
+                        assigneePreviewAvatar.append(el('img', { src: emp.photo_url, alt: emp.full_name }));
+                    } else {
+                        const color = AVATAR_COLORS[(Math.abs(Number(emp.id) || 1) - 1) % AVATAR_COLORS.length];
+                        assigneePreviewAvatar.append(el('span', { class: 'avatar', style: `background:${color}`, text: initials(emp.full_name) }));
+                    }
+                }
+                if (assigneePreviewName) assigneePreviewName.textContent = emp.full_name;
+                if (assigneePreviewRole) assigneePreviewRole.textContent = emp.position || 'Исполнитель';
+                if (assigneePreviewDept) assigneePreviewDept.textContent = emp.department || '';
+                if (assigneeSubmitBtn) assigneeSubmitBtn.disabled = false;
+            }
+        });
+    }
+    window.renderPeople = renderPeople;
+
+    if (assigneeForm) {
+        assigneeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const selectedEmpId = assigneeEmployeeSelect && assigneeEmployeeSelect.value ? Number(assigneeEmployeeSelect.value) : null;
+            if (!selectedEmpId) return;
+
+            if (assigneeSubmitBtn) assigneeSubmitBtn.disabled = true;
+
+            try {
+                const res = await fetch('/api/assignees/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: JSON.stringify({
+                        employee_id: selectedEmpId
+                    })
+                });
+                const data = await res.json();
+                if (data.success && Array.isArray(data.assignees)) {
+                    state.assignees = data.assignees;
+                    CONFIG.assignees = data.assignees;
+                    assigneesById = byId(getAssignees());
+                    updateAssigneeDropdowns();
+                    renderPeople();
+                    render();
+                    closeAddAssigneeModal();
+                    showToast('Исполнитель добавлен', 'success');
+                } else {
+                    alert(data.message || data.error || 'Ошибка добавления исполнителя');
+                }
+            } catch (err) {
+                console.error('Ошибка сохранения исполнителя:', err);
+                alert('Не удалось добавить исполнителя');
+            } finally {
+                if (assigneeSubmitBtn) assigneeSubmitBtn.disabled = false;
+            }
+        });
+    }
+    window.renderPeople = renderPeople;
+
+    async function deleteAssignee(id) {
+        try {
+            const res = await fetch(`/api/assignees/${encodeURIComponent(id)}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrfToken()
+                }
+            });
+            const data = await res.json();
+            if (data.success && Array.isArray(data.assignees)) {
+                state.assignees = data.assignees;
+                CONFIG.assignees = data.assignees;
+                assigneesById = byId(getAssignees());
+                updateAssigneeDropdowns();
+                renderPeople();
+                render();
+                showToast('Исполнитель удален', 'success');
+            } else {
+                alert(data.error || 'Ошибка удаления исполнителя');
+            }
+        } catch (err) {
+            console.error('Ошибка удаления исполнителя:', err);
+            alert('Не удалось удалить исполнителя');
+        }
+    }
+
+    function updateAssigneeDropdowns() {
+        const assignees = getAssignees();
+        if (form && form.assignee) {
+            const cur = form.assignee.value;
+            fillSelect(form.assignee, [{ id: '', name: 'Не назначен' }, ...assignees]);
+            form.assignee.value = cur;
+        }
+        if (typeof updateAssigneeFilters === 'function') {
+            updateAssigneeFilters();
+        }
+    }
 
     // ---------- Фильтры и поиск ----------
     const filterAssignee = document.getElementById('filterAssignee');
@@ -1699,6 +1952,7 @@
             employeesGridEl.appendChild(card);
         });
     }
+    window.renderPeople = renderPeople;
 
     // ---------- Мои задачи ----------
     function getMyTasks() {
@@ -1712,6 +1966,7 @@
             return matchesCreator || matchesWorkplace;
         });
     }
+    window.renderPeople = renderPeople;
 
     function renderMyTasks() {
         if (!myTasksGridEl) return;
@@ -1767,6 +2022,7 @@
             myTasksGridEl.appendChild(card);
         });
     }
+    window.renderPeople = renderPeople;
 
     function openEmployeeModal(emp, isEditMode = false) {
         if (!employeeModalEl || !employeeDialogEl) return;
@@ -2547,6 +2803,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     async function refreshEmployees() {
         try {
@@ -2602,6 +2859,7 @@
             creatorListEl.appendChild(el('option', { value: name }));
         });
     }
+    window.renderPeople = renderPeople;
 
     if (employeeModalEl) {
         employeeModalEl.querySelectorAll('[data-close]').forEach((n) =>
@@ -2625,18 +2883,21 @@
             render();
         });
     }
+    window.renderPeople = renderPeople;
     if (filterEmpWorkplaceEl) {
         filterEmpWorkplaceEl.addEventListener('change', () => {
             state.empFilters.workplace = filterEmpWorkplaceEl.value;
             render();
         });
     }
+    window.renderPeople = renderPeople;
     if (filterEmpFloorEl) {
         filterEmpFloorEl.addEventListener('change', () => {
             state.empFilters.floor = filterEmpFloorEl.value;
             render();
         });
     }
+    window.renderPeople = renderPeople;
     if (resetEmpFiltersEl) {
         resetEmpFiltersEl.addEventListener('click', () => {
             state.empFilters = { dept: '', workplace: '', floor: '', query: '' };
@@ -2647,6 +2908,7 @@
             render();
         });
     }
+    window.renderPeople = renderPeople;
 
     // Инициализируем фильтры и список создателей
     initEmployeeFilters();
@@ -2678,6 +2940,7 @@
             if (sidebarOverlayEl) sidebarOverlayEl.hidden = !isOpen;
         });
     }
+    window.renderPeople = renderPeople;
     if (sidebarOverlayEl) {
         sidebarOverlayEl.addEventListener('click', closeMobileSidebar);
     }
@@ -2741,6 +3004,7 @@
             });
         });
     }
+    window.renderPeople = renderPeople;
 
     // ---------- Предупреждение о сборе Cookie ----------
     function initCookieBanner() {
@@ -2766,6 +3030,7 @@
             }, 300);
         });
     }
+    window.renderPeople = renderPeople;
 
     // ---------- Учёт рабочего времени ----------
     const START_PHRASES = [
@@ -3333,6 +3598,7 @@
             inventoryTableBodyEl.appendChild(tr);
         });
     }
+    window.renderPeople = renderPeople;
 
     function openInventoryViewModal(item) {
         if (!inventoryModalEl || !inventoryViewDialogEl || !item) return;
@@ -3531,6 +3797,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     if (invTypeCodeInputEl) {
         invTypeCodeInputEl.addEventListener('change', () => {
@@ -3540,6 +3807,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     if (inventoryFormEl) {
         inventoryFormEl.addEventListener('submit', async (e) => {
@@ -3591,6 +3859,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     // Модальное окно подтверждения удаления оборудования
     const deleteInventoryModal = document.getElementById('deleteInventoryModal');
@@ -3622,6 +3891,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     if (confirmDeleteInventoryBtn) {
         confirmDeleteInventoryBtn.addEventListener('click', async () => {
@@ -3658,6 +3928,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     // Модальное окно подтверждения списания оборудования (из карточки сотрудника)
     const decommissionInventoryModal = document.getElementById('decommissionInventoryModal');
@@ -3692,6 +3963,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     if (confirmDecommissionInventoryBtn) {
         confirmDecommissionInventoryBtn.addEventListener('click', async () => {
@@ -3746,6 +4018,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     if (invDeleteBtnEl) {
         invDeleteBtnEl.addEventListener('click', () => {
@@ -3754,6 +4027,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     if (invPrintStickerBtnEl) {
         invPrintStickerBtnEl.addEventListener('click', () => {
@@ -3762,6 +4036,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     if (filterInvStatusEl) {
         filterInvStatusEl.addEventListener('change', () => {
@@ -3769,6 +4044,7 @@
             render();
         });
     }
+    window.renderPeople = renderPeople;
 
     if (filterInvCategoryEl) {
         filterInvCategoryEl.addEventListener('change', () => {
@@ -3776,6 +4052,7 @@
             render();
         });
     }
+    window.renderPeople = renderPeople;
 
     if (resetInvFiltersEl) {
         resetInvFiltersEl.addEventListener('click', () => {
@@ -3787,6 +4064,7 @@
             render();
         });
     }
+    window.renderPeople = renderPeople;
 
     // ---------- Генерация QR-кода и печать наклеек 50x30 мм ----------
 
@@ -4451,6 +4729,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     // ---------- Прикрепление скриншотов к задаче (лимит до 10 шт.) ----------
     const MAX_TASK_SCREENSHOTS = 10;
@@ -4501,6 +4780,7 @@
             taskScreenshotGrid.append(item);
         });
     }
+    window.renderPeople = renderPeople;
 
     async function removeScreenshot(idx) {
         if (idx >= 0 && idx < currentScreenshots.length) {
@@ -4645,6 +4925,7 @@
             }
         });
     }
+    window.renderPeople = renderPeople;
 
     // ==========================================================================
     // Раздел: Бронирование переговорных комнат
@@ -4799,6 +5080,7 @@
             });
         });
     }
+    window.renderPeople = renderPeople;
 
     function showBookingError(msg) {
         if (!bookingErrorMsg) return;
@@ -4947,6 +5229,7 @@
             loadRoomCardData(roomCode, isToday);
         });
     }
+    window.renderPeople = renderPeople;
 
     async function loadRoomCardData(roomCode, isToday) {
         try {

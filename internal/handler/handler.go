@@ -87,6 +87,11 @@ func (h *Handler) InitRoutes() http.Handler {
 	mux.HandleFunc("POST /api/tasks/delete-screenshot/{$}", h.RequireAuth(h.DeleteTaskScreenshot))
 	mux.HandleFunc("POST /api/tasks/delete-screenshot", h.RequireAuth(h.DeleteTaskScreenshot))
 
+	// REST ASSIGNEES (Исполнители)
+	mux.HandleFunc("GET /api/assignees/{$}", h.RequireAuth(h.GetAssignees))
+	mux.HandleFunc("POST /api/assignees/create/{$}", h.RequireAdmin(h.CreateAssignee))
+	mux.HandleFunc("POST /api/assignees/{id}/delete/{$}", h.RequireAdmin(h.DeleteAssignee))
+
 	//REST WORKDAY
 	mux.HandleFunc("GET /api/workday/status/{$}", h.RequireAuth(h.GetWorkdayStatus))
 	mux.HandleFunc("POST /api/workday/start/{$}", h.RequireAuth(h.StartWorkday))
