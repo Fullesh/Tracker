@@ -37,17 +37,19 @@ type Floor struct {
 
 // Workplace представляет рабочее место или переговорную на карте офиса
 type Workplace struct {
-	ID       uint   `gorm:"primaryKey" json:"id"`
-	FloorID  uint   `gorm:"not null;index" json:"floor_id"`
-	IP       string `gorm:"size:45" json:"ip"`
-	Code     string `gorm:"size:20;uniqueIndex;not null" json:"code"`
-	Kind     string `gorm:"size:20;default:'pc';not null" json:"kind"`
-	Employee string `gorm:"size:150" json:"employee"`
-	Label    string `gorm:"size:150" json:"label"`
-	Room     string `gorm:"size:150" json:"room"`
-	X        int    `gorm:"not null" json:"x"`
-	Y        int    `gorm:"not null" json:"y"`
-	Tasks    []Task `gorm:"constraint:OnDelete:CASCADE;" json:"tasks,omitempty"`
+	ID       uint    `gorm:"primaryKey" json:"id"`
+	FloorID  uint    `gorm:"not null;index" json:"floor_id"`
+	IP       string  `gorm:"size:45" json:"ip"`
+	Code     string  `gorm:"size:20;uniqueIndex;not null" json:"code"`
+	Kind     string  `gorm:"size:20;default:'pc';not null" json:"kind"`
+	Employee string  `gorm:"size:150" json:"employee"`
+	Label    string  `gorm:"size:150" json:"label"`
+	Room     string  `gorm:"size:150" json:"room"`
+	X        int     `gorm:"not null" json:"x"`
+	Y        int     `gorm:"not null" json:"y"`
+	Rotation int     `gorm:"default:0" json:"rotation"`
+	Scale    float64 `gorm:"default:1.0" json:"scale"`
+	Tasks    []Task  `gorm:"constraint:OnDelete:CASCADE;" json:"tasks,omitempty"`
 }
 
 // Employee содержит карточку сотрудника и привязку к рабочему месту

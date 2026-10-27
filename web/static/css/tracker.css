@@ -3888,3 +3888,49 @@ img.avatar,
     font-size: 11.5px;
     color: var(--text-tertiary);
 }
+
+/* Масштаб оборудования на плане */
+.equip-scale-widget {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-control);
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 13px;
+}
+.equip-scale-widget__label {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+}
+.equip-scale-widget__btns {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+.equip-scale-widget__btns .zoom-btn {
+    height: 28px;
+    min-width: 28px;
+    padding: 0 6px;
+    font-size: 14px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background .12s, border-color .12s;
+}
+.equip-scale-widget__btns .zoom-btn:hover {
+    background: var(--bg-control);
+    border-color: var(--accent);
+}
+.equip-scale-widget__btns .zoom-btn--val {
+    font-size: 11.5px;
+    font-weight: 600;
+    min-width: 44px;
+}

@@ -714,6 +714,49 @@
         floorSvg.setAttribute('viewBox', `${mapViewBox.x} ${mapViewBox.y} ${mapViewBox.w} ${mapViewBox.h}`);
     }
 
+    // ---------- Масштаб оборудования на карте ----------
+    let equipmentScale = parseFloat(localStorage.getItem('tracker_equipment_scale') || '1.0');
+    if (isNaN(equipmentScale) || equipmentScale < 0.5 || equipmentScale > 2.0) {
+        equipmentScale = 1.0;
+    }
+
+    function updateEquipScaleUI() {
+        const valBtn = document.getElementById('equipScaleResetBtn');
+        if (valBtn) {
+            valBtn.textContent = `${Math.round(equipmentScale * 100)}%`;
+        }
+    }
+
+    const equipScaleMinusBtn = document.getElementById('equipScaleMinusBtn');
+    const equipScaleResetBtn = document.getElementById('equipScaleResetBtn');
+    const equipScalePlusBtn = document.getElementById('equipScalePlusBtn');
+
+    if (equipScaleMinusBtn) {
+        equipScaleMinusBtn.addEventListener('click', () => {
+            equipmentScale = Math.max(0.5, Math.round((equipmentScale - 0.1) * 10) / 10);
+            localStorage.setItem('tracker_equipment_scale', equipmentScale.toFixed(1));
+            updateEquipScaleUI();
+            renderMap(state.tasks);
+        });
+    }
+    if (equipScalePlusBtn) {
+        equipScalePlusBtn.addEventListener('click', () => {
+            equipmentScale = Math.min(2.0, Math.round((equipmentScale + 0.1) * 10) / 10);
+            localStorage.setItem('tracker_equipment_scale', equipmentScale.toFixed(1));
+            updateEquipScaleUI();
+            renderMap(state.tasks);
+        });
+    }
+    if (equipScaleResetBtn) {
+        equipScaleResetBtn.addEventListener('click', () => {
+            equipmentScale = 1.0;
+            localStorage.setItem('tracker_equipment_scale', '1.0');
+            updateEquipScaleUI();
+            renderMap(state.tasks);
+        });
+    }
+    updateEquipScaleUI();
+
     function setMapZoom(newZoom, anchorX, anchorY) {
         const clampedZoom = Math.max(0.4, Math.min(5.0, newZoom));
         const curFloor = floorsById[state.floor];
@@ -1146,23 +1189,26 @@
             const dimmed = active && !open.length && !(q && placeMatchesQuery(wp, q));
             const selected = state.selectedPlace === wp.id;
             const w = 72, h = 48;
+            const rot = Number(wp.rotation) || 0;
+            const itemScale = (Number(wp.scale) || 1.0) * equipmentScale;
 
             const g = svg('g', {
                 class: `desk ${status}${selected ? ' desk--selected' : ''}${dimmed ? ' desk--dimmed' : ''}`,
                 tabindex: 0,
                 role: 'button',
                 'aria-label': `${wp.id} ${placeTitle(wp)}`,
+                transform: `translate(${wp.x}, ${wp.y}) rotate(${rot}) scale(${itemScale})`,
                 onclick: () => { hideHoverCard(); selectPlace(wp.id); },
                 onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hideHoverCard(); selectPlace(wp.id); } },
             }, [
-                worst === 's1' ? svg('rect', { class: 'desk__pulse', x: wp.x - w / 2, y: wp.y - h / 2, width: w, height: h, rx: 10 }) : null,
-                svg('rect', { class: 'desk__body', x: wp.x - w / 2, y: wp.y - h / 2, width: w, height: h, rx: 10 }),
-                svg('path', { class: 'desk__icon', d: KIND_ICON[wp.kind] || KIND_ICON.pc, transform: `translate(${wp.x - 10} ${wp.y - 21}) scale(0.84)` }),
-                svg('text', { class: 'desk__id', x: wp.x, y: wp.y + 17, text: wp.id }),
-                svg('text', { class: 'desk__name', x: wp.x, y: wp.y + h / 2 + 16, text: formatDeskLabel(wp.label) }),
+                worst === 's1' ? svg('rect', { class: 'desk__pulse', x: -w / 2, y: -h / 2, width: w, height: h, rx: 10 }) : null,
+                svg('rect', { class: 'desk__body', x: -w / 2, y: -h / 2, width: w, height: h, rx: 10 }),
+                svg('path', { class: 'desk__icon', d: KIND_ICON[wp.kind] || KIND_ICON.pc, transform: 'translate(-10, -21) scale(0.84)' }),
+                svg('text', { class: 'desk__id', x: 0, y: 17, text: wp.id }),
+                svg('text', { class: 'desk__name', x: 0, y: h / 2 + 16, text: formatDeskLabel(wp.label) }),
                 open.length ? svg('g', { class: 'desk__badge' }, [
-                    svg('circle', { cx: wp.x + w / 2 - 2, cy: wp.y - h / 2 + 2, r: 11 }),
-                    svg('text', { x: wp.x + w / 2 - 2, y: wp.y - h / 2 + 2, text: open.length }),
+                    svg('circle', { cx: w / 2 - 2, cy: -h / 2 + 2, r: 11 }),
+                    svg('text', { x: w / 2 - 2, y: -h / 2 + 2, text: open.length }),
                 ]) : null,
             ]);
             g.addEventListener('mouseenter', () => showDeskHoverCard(wp, g));

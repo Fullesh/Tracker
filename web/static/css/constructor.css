@@ -882,3 +882,61 @@
 
 
 
+
+.wall-handle {
+    fill: #fc3f1d;
+    stroke: #fff;
+    stroke-width: 2.5;
+    cursor: crosshair;
+    transition: transform .1s;
+}
+.wall-handle:hover {
+    fill: #ff9900;
+}
+
+.desk-rotate-stem {
+    stroke: #fc3f1d;
+    stroke-width: 1.5;
+    stroke-dasharray: 2 2;
+    pointer-events: none;
+}
+
+.desk-rotate-handle {
+    fill: #fc3f1d;
+    stroke: #fff;
+    stroke-width: 2.5;
+    cursor: grab;
+    transition: transform .1s;
+}
+.desk-rotate-handle:hover {
+    fill: #ff9900;
+}
+.desk-rotate-handle:active {
+    cursor: grabbing;
+}
+
+.rotation-control-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+.rotation-presets {
+    display: inline-flex;
+    gap: 3px;
+    background: var(--bg-control);
+    padding: 2px;
+    border-radius: var(--radius-s);
+}
+.rotation-presets .btn {
+    padding: 2px 7px;
+    font-size: 11px;
+    height: 24px;
+    min-width: 32px;
+}
+.btn--active-preset {
+    background: var(--accent) !important;
+    color: #21201f !important;
+    font-weight: 700;
+}

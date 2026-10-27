@@ -280,12 +280,29 @@
                 'data-index': index,
             });
             line.onclick = (e) => handleItemClick('wall', index, e);
+            line.onmousedown = (e) => handleItemMouseDown('wall', index, e);
             wallsLayer.appendChild(line);
 
             if (isSelected) {
-                // Точки на концах выбранной стены
-                const h1 = svg('circle', { class: 'wall-handle', cx: w.x1, cy: w.y1, r: 5 });
-                const h2 = svg('circle', { class: 'wall-handle', cx: w.x2, cy: w.y2, r: 5 });
+                // Точки на концах выбранной стены (хэндлы растягивания)
+                const h1 = svg('circle', {
+                    class: 'wall-handle',
+                    cx: w.x1,
+                    cy: w.y1,
+                    r: 7,
+                    'data-handle': '1',
+                    title: 'Потяните, чтобы растянуть стену'
+                });
+                const h2 = svg('circle', {
+                    class: 'wall-handle',
+                    cx: w.x2,
+                    cy: w.y2,
+                    r: 7,
+                    'data-handle': '2',
+                    title: 'Потяните, чтобы растянуть стену'
+                });
+                h1.onmousedown = (e) => handleWallHandleMouseDown(index, 1, e);
+                h2.onmousedown = (e) => handleWallHandleMouseDown(index, 2, e);
                 wallsLayer.appendChild(h1);
                 wallsLayer.appendChild(h2);
             }
@@ -310,9 +327,11 @@
         const deskH = 48;
         floor.workplaces.forEach((wp, index) => {
             const isSelected = state.selectedItem && state.selectedItem.type === 'workplace' && state.selectedItem.index === index;
+            const rot = Number(wp.rotation) || 0;
+            const sc = Number(wp.scale) || 1.0;
             const g = svg('g', {
                 class: `desk-element${isSelected ? ' desk-element--selected' : ''}`,
-                transform: `translate(${wp.x}, ${wp.y})`,
+                transform: `translate(${wp.x}, ${wp.y}) rotate(${rot}) scale(${sc})`,
                 'data-index': index,
             });
 
@@ -351,6 +370,28 @@
             });
             textName.textContent = formatDeskLabel(wp.label);
             g.appendChild(textName);
+
+            if (isSelected) {
+                // Хэндл вращения сверху объекта
+                const stem = svg('line', {
+                    class: 'desk-rotate-stem',
+                    x1: 0,
+                    y1: -deskH / 2,
+                    x2: 0,
+                    y2: -deskH / 2 - 20,
+                });
+                g.appendChild(stem);
+
+                const rotateHandle = svg('circle', {
+                    class: 'desk-rotate-handle',
+                    cx: 0,
+                    cy: -deskH / 2 - 20,
+                    r: 7,
+                    title: 'Повернуть объект (R или перетаскивание)',
+                });
+                rotateHandle.onmousedown = (e) => handleRotateHandleMouseDown(index, e);
+                g.appendChild(rotateHandle);
+            }
 
             g.onclick = (e) => handleItemClick('workplace', index, e);
             g.onmousedown = (e) => handleItemMouseDown('workplace', index, e);
@@ -395,6 +436,44 @@
         renderInspector();
     }
 
+    function handleWallHandleMouseDown(index, handleNum, e) {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        const floor = getCurrentFloor();
+        state.selectedItem = { type: 'wall', index, data: floor.walls[index] };
+        setTool('select');
+        renderInspector();
+
+        state.dragTarget = {
+            type: 'wall-handle',
+            index: index,
+            handle: handleNum,
+            data: floor.walls[index]
+        };
+        state.isDragging = true;
+        editorSvg.classList.add('cursor-grabbing');
+    }
+
+    function handleRotateHandleMouseDown(index, e) {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        const floor = getCurrentFloor();
+        const wp = floor.workplaces[index];
+        state.selectedItem = { type: 'workplace', index, data: wp };
+        setTool('select');
+        renderInspector();
+
+        state.dragTarget = {
+            type: 'rotate',
+            index: index,
+            data: wp,
+            centerX: wp.x,
+            centerY: wp.y
+        };
+        state.isDragging = true;
+        editorSvg.classList.add('cursor-grabbing');
+    }
+
     function handleItemMouseDown(type, index, e) {
         if (state.currentTool === 'delete') return;
         if (e.button !== 0) return; // только левая кнопка
@@ -415,11 +494,25 @@
             state.dragStartX = coords.rawX;
             state.dragStartY = coords.rawY;
             state.isDragging = false;
-            state.dragTarget = { type, index, data: targetData };
-            state.dragOffset = {
-                x: coords.rawX - targetData.x,
-                y: coords.rawY - targetData.y,
-            };
+            if (type === 'wall') {
+                state.dragTarget = {
+                    type: 'wall',
+                    index: index,
+                    data: targetData,
+                    startX1: targetData.x1,
+                    startY1: targetData.y1,
+                    startX2: targetData.x2,
+                    startY2: targetData.y2,
+                    startMouseX: coords.rawX,
+                    startMouseY: coords.rawY
+                };
+            } else {
+                state.dragTarget = { type, index, data: targetData };
+                state.dragOffset = {
+                    x: coords.rawX - targetData.x,
+                    y: coords.rawY - targetData.y,
+                };
+            }
         }
     }
 
@@ -502,6 +595,71 @@
 
         // 2. Перетаскивание объекта (с порогом чувствительности >4px)
         if (state.dragTarget) {
+            // Растягивание стены за один из концов
+            if (state.dragTarget.type === 'wall-handle') {
+                const isShift = e.shiftKey;
+                const newX = snap(coords.rawX, state.gridSnap, isShift);
+                const newY = snap(coords.rawY, state.gridSnap, isShift);
+                const { w: baseW, h: baseH } = getFloorDims();
+                const clampedX = Math.max(0, Math.min(baseW, newX));
+                const clampedY = Math.max(0, Math.min(baseH, newY));
+                const w = state.dragTarget.data;
+                if (state.dragTarget.handle === 1) {
+                    w.x1 = clampedX;
+                    w.y1 = clampedY;
+                } else {
+                    w.x2 = clampedX;
+                    w.y2 = clampedY;
+                }
+                renderCanvas();
+                renderInspector();
+                return;
+            }
+
+            // Вращение объекта за хэндл
+            if (state.dragTarget.type === 'rotate') {
+                const wp = state.dragTarget.data;
+                const dx = coords.rawX - wp.x;
+                const dy = coords.rawY - wp.y;
+                const rad = Math.atan2(dy, dx);
+                let deg = Math.round((rad * 180 / Math.PI) + 90);
+                deg = (deg % 360 + 360) % 360;
+                if (!e.shiftKey) {
+                    deg = Math.round(deg / 15) * 15 % 360;
+                }
+                wp.rotation = deg;
+                renderCanvas();
+                renderInspector();
+                return;
+            }
+
+            // Перемещение всей стены
+            if (state.dragTarget.type === 'wall') {
+                if (!state.isDragging && state.dragStartX !== undefined) {
+                    const dist = Math.hypot(coords.rawX - state.dragStartX, coords.rawY - state.dragStartY);
+                    if (dist > 4) {
+                        state.isDragging = true;
+                        editorSvg.classList.add('cursor-grabbing');
+                    }
+                }
+                if (state.isDragging) {
+                    const isShift = e.shiftKey;
+                    const rawDx = coords.rawX - state.dragTarget.startMouseX;
+                    const rawDy = coords.rawY - state.dragTarget.startMouseY;
+                    const dx = snap(rawDx, state.gridSnap, isShift);
+                    const dy = snap(rawDy, state.gridSnap, isShift);
+                    const w = state.dragTarget.data;
+                    w.x1 = state.dragTarget.startX1 + dx;
+                    w.y1 = state.dragTarget.startY1 + dy;
+                    w.x2 = state.dragTarget.startX2 + dx;
+                    w.y2 = state.dragTarget.startY2 + dy;
+                    renderCanvas();
+                    renderInspector();
+                    return;
+                }
+            }
+
+            // Перемещение рабочего места или подписи
             if (!state.isDragging && state.dragStartX !== undefined) {
                 const dist = Math.hypot(coords.rawX - state.dragStartX, coords.rawY - state.dragStartY);
                 if (dist > 4) {
@@ -655,6 +813,15 @@
                 state.isSpacePressed = true;
                 editorSvg.classList.add('cursor-pan');
             }
+        } else if ((e.key === 'r' || e.key === 'R' || e.key === 'к' || e.key === 'К') && !inInput) {
+            if (state.selectedItem && state.selectedItem.type === 'workplace') {
+                const wp = state.selectedItem.data;
+                const step = e.shiftKey ? -90 : 90;
+                wp.rotation = ((Number(wp.rotation) || 0) + step + 360) % 360;
+                renderCanvas();
+                renderInspector();
+                return;
+            }
         } else if (e.key === 'Escape') {
             state.wallStart = null;
             tempLayer.innerHTML = '';
@@ -718,6 +885,8 @@
 
         if (item.type === 'workplace') {
             const wp = item.data;
+            const rot = Number(wp.rotation) || 0;
+            const sc = Number(wp.scale) || 1.0;
             const isPrinter = wp.kind === 'printer';
             const isServer = wp.kind === 'server';
             const isPC = wp.kind === 'pc';
@@ -792,6 +961,38 @@
                     <label>Помещение / Зона</label>
                     <input type="text" class="form-input" id="propRoom" value="${escapeHtml(wp.room || '')}" placeholder="например: Бухгалтерия">
                 </div>
+                <div class="form-group">
+                    <label>Поворот (${rot}°)</label>
+                    <div class="rotation-control-row">
+                        <button type="button" class="btn btn--ghost btn--xs" id="rotatePrevBtn" title="Повернуть на -45°">⟲ -45°</button>
+                        <div class="rotation-presets">
+                            <button type="button" class="btn btn--xs ${rot === 0 ? 'btn--active-preset' : 'btn--ghost'}" data-rot="0">0°</button>
+                            <button type="button" class="btn btn--xs ${rot === 90 ? 'btn--active-preset' : 'btn--ghost'}" data-rot="90">90°</button>
+                            <button type="button" class="btn btn--xs ${rot === 180 ? 'btn--active-preset' : 'btn--ghost'}" data-rot="180">180°</button>
+                            <button type="button" class="btn btn--xs ${rot === 270 ? 'btn--active-preset' : 'btn--ghost'}" data-rot="270">270°</button>
+                        </div>
+                        <button type="button" class="btn btn--ghost btn--xs" id="rotateNextBtn" title="Повернуть на +45°">⟳ +45°</button>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+                        <input type="range" min="0" max="345" step="15" class="form-range" id="propRotSlider" value="${rot}" style="flex:1;">
+                        <input type="number" class="form-input" id="propRotInput" value="${rot}" min="0" max="360" step="1" style="width:64px; text-align:center;">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Масштаб (${Math.round(sc * 100)}%)</label>
+                    <div class="rotation-control-row">
+                        <div class="rotation-presets">
+                            <button type="button" class="btn btn--xs ${Math.abs(sc - 0.8) < 0.05 ? 'btn--active-preset' : 'btn--ghost'}" data-scale="0.8">80%</button>
+                            <button type="button" class="btn btn--xs ${Math.abs(sc - 1.0) < 0.05 ? 'btn--active-preset' : 'btn--ghost'}" data-scale="1.0">100%</button>
+                            <button type="button" class="btn btn--xs ${Math.abs(sc - 1.2) < 0.05 ? 'btn--active-preset' : 'btn--ghost'}" data-scale="1.2">120%</button>
+                            <button type="button" class="btn btn--xs ${Math.abs(sc - 1.5) < 0.05 ? 'btn--active-preset' : 'btn--ghost'}" data-scale="1.5">150%</button>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+                        <input type="range" min="0.5" max="2.0" step="0.05" class="form-range" id="propScaleSlider" value="${sc}" style="flex:1;">
+                        <span id="propScaleVal" style="font-size:12px; font-weight:600; min-width:44px; text-align:right;">${Math.round(sc * 100)}%</span>
+                    </div>
+                </div>
                 <div class="grid-2">
                     <div class="form-group">
                         <label>X</label>
@@ -810,6 +1011,46 @@
             document.getElementById('propRoom').oninput = (e) => { wp.room = e.target.value; };
             document.getElementById('propX').onchange = (e) => { wp.x = Number(e.target.value); renderCanvas(); };
             document.getElementById('propY').onchange = (e) => { wp.y = Number(e.target.value); renderCanvas(); };
+
+            const setWpRotation = (newRot) => {
+                wp.rotation = ((newRot % 360) + 360) % 360;
+                renderCanvas();
+                renderInspector();
+            };
+            const setWpScale = (newSc) => {
+                wp.scale = Math.max(0.5, Math.min(2.0, Math.round(newSc * 100) / 100));
+                renderCanvas();
+                renderInspector();
+            };
+            const rotatePrevBtn = document.getElementById('rotatePrevBtn');
+            if (rotatePrevBtn) rotatePrevBtn.onclick = () => setWpRotation(rot - 45);
+            const rotateNextBtn = document.getElementById('rotateNextBtn');
+            if (rotateNextBtn) rotateNextBtn.onclick = () => setWpRotation(rot + 45);
+
+            inspectorBody.querySelectorAll('[data-rot]').forEach((btn) => {
+                btn.onclick = () => setWpRotation(Number(btn.getAttribute('data-rot')));
+            });
+            inspectorBody.querySelectorAll('[data-scale]').forEach((btn) => {
+                btn.onclick = () => setWpScale(Number(btn.getAttribute('data-scale')));
+            });
+
+            const propRotSlider = document.getElementById('propRotSlider');
+            if (propRotSlider) propRotSlider.oninput = (e) => {
+                wp.rotation = Number(e.target.value);
+                const rotInp = document.getElementById('propRotInput');
+                if (rotInp) rotInp.value = wp.rotation;
+                renderCanvas();
+            };
+            const propRotInput = document.getElementById('propRotInput');
+            if (propRotInput) propRotInput.onchange = (e) => setWpRotation(Number(e.target.value));
+
+            const propScaleSlider = document.getElementById('propScaleSlider');
+            if (propScaleSlider) propScaleSlider.oninput = (e) => {
+                wp.scale = Number(e.target.value);
+                const scVal = document.getElementById('propScaleVal');
+                if (scVal) scVal.textContent = `${Math.round(wp.scale * 100)}%`;
+                renderCanvas();
+            };
 
             const propIpEl = document.getElementById('propIp');
             if (propIpEl) {
@@ -878,8 +1119,15 @@
             document.getElementById('propLabelY').onchange = (e) => { lbl.y = Number(e.target.value); renderCanvas(); };
         } else if (item.type === 'wall') {
             const w = item.data;
+            const len = Math.round(Math.hypot(w.x2 - w.x1, w.y2 - w.y1));
             inspectorTitle.textContent = 'Стена (отрезок)';
             inspectorBody.innerHTML = `
+                <div class="form-group">
+                    <label>Длина стены</label>
+                    <div style="font-weight:700; font-size:14px; color:var(--text-primary); padding:2px 0;">
+                        ${len} px
+                    </div>
+                </div>
                 <div class="grid-2">
                     <div class="form-group">
                         <label>X1</label>
@@ -901,10 +1149,10 @@
                     </div>
                 </div>
             `;
-            document.getElementById('propWallX1').onchange = (e) => { w.x1 = Number(e.target.value); renderCanvas(); };
-            document.getElementById('propWallY1').onchange = (e) => { w.y1 = Number(e.target.value); renderCanvas(); };
-            document.getElementById('propWallX2').onchange = (e) => { w.x2 = Number(e.target.value); renderCanvas(); };
-            document.getElementById('propWallY2').onchange = (e) => { w.y2 = Number(e.target.value); renderCanvas(); };
+            document.getElementById('propWallX1').oninput = (e) => { w.x1 = Number(e.target.value); renderCanvas(); };
+            document.getElementById('propWallY1').oninput = (e) => { w.y1 = Number(e.target.value); renderCanvas(); };
+            document.getElementById('propWallX2').oninput = (e) => { w.x2 = Number(e.target.value); renderCanvas(); };
+            document.getElementById('propWallY2').oninput = (e) => { w.y2 = Number(e.target.value); renderCanvas(); };
         }
     }
 

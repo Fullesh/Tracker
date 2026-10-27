@@ -48,6 +48,10 @@ func InitDB() (*gorm.DB, error) {
 	sqlDB.SetConnMaxLifetime(30 * time.Minute) // Время жизни подключения
 
 	log.Println("Выполнено подключение к БД")
+	if db.Migrator().HasTable("workplaces") {
+		_ = db.Exec("ALTER TABLE workplaces ADD COLUMN IF NOT EXISTS rotation integer DEFAULT 0").Error
+		_ = db.Exec("ALTER TABLE workplaces ADD COLUMN IF NOT EXISTS scale double precision DEFAULT 1.0").Error
+	}
 	return db, nil
 }
 
