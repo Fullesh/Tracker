@@ -1639,7 +1639,10 @@
     // ---------- Модальное окно добавления исполнителя ----------
     const assigneeModal = document.getElementById('assigneeModal');
     const assigneeForm = document.getElementById('assigneeForm');
-    const assigneeEmployeeSelect = document.getElementById('assigneeEmployeeSelect');
+    const assigneeSearchInput = document.getElementById('assigneeSearchInput');
+    const assigneeSelectedEmployeeId = document.getElementById('assigneeSelectedEmployeeId');
+    const assigneeClearBtn = document.getElementById('assigneeClearBtn');
+    const assigneeAutocompleteList = document.getElementById('assigneeAutocompleteList');
     const assigneePreviewCard = document.getElementById('assigneePreviewCard');
     const assigneePreviewAvatar = document.getElementById('assigneePreviewAvatar');
     const assigneePreviewName = document.getElementById('assigneePreviewName');
@@ -1647,31 +1650,126 @@
     const assigneePreviewDept = document.getElementById('assigneePreviewDept');
     const assigneeSubmitBtn = document.getElementById('assigneeSubmitBtn');
 
+    function highlightSearchMatch(text, query) {
+        if (!query) return escapeHtml(text || '');
+        const idx = (text || '').toLowerCase().indexOf(query.toLowerCase());
+        if (idx === -1) return escapeHtml(text || '');
+        const before = escapeHtml((text || '').slice(0, idx));
+        const match = escapeHtml((text || '').slice(idx, idx + query.length));
+        const after = escapeHtml((text || '').slice(idx + query.length));
+        return `${before}<mark>${match}</mark>${after}`;
+    }
+
+    function applyAssigneeSelection(emp) {
+        if (!emp) {
+            if (assigneeSelectedEmployeeId) assigneeSelectedEmployeeId.value = '';
+            if (assigneeSearchInput) assigneeSearchInput.value = '';
+            if (assigneeClearBtn) assigneeClearBtn.hidden = true;
+            if (assigneePreviewCard) assigneePreviewCard.style.display = 'none';
+            if (assigneeAutocompleteList) assigneeAutocompleteList.style.display = 'flex';
+            if (assigneeSubmitBtn) assigneeSubmitBtn.disabled = true;
+            renderAssigneeSuggestions('');
+            return;
+        }
+        if (assigneeSelectedEmployeeId) assigneeSelectedEmployeeId.value = String(emp.id);
+        if (assigneeSearchInput) assigneeSearchInput.value = emp.full_name || '';
+        if (assigneeClearBtn) assigneeClearBtn.hidden = false;
+        if (assigneeAutocompleteList) assigneeAutocompleteList.style.display = 'none';
+        if (assigneePreviewCard) assigneePreviewCard.style.display = 'flex';
+        if (assigneePreviewAvatar) {
+            assigneePreviewAvatar.innerHTML = '';
+            if (emp.photo_url) {
+                assigneePreviewAvatar.append(el('img', { src: emp.photo_url, alt: emp.full_name }));
+            } else {
+                const color = AVATAR_COLORS[(Math.abs(Number(emp.id) || 1) - 1) % AVATAR_COLORS.length];
+                assigneePreviewAvatar.append(el('span', { class: 'avatar', style: `background:${color}`, text: initials(emp.full_name) }));
+            }
+        }
+        if (assigneePreviewName) assigneePreviewName.textContent = emp.full_name;
+        if (assigneePreviewRole) assigneePreviewRole.textContent = emp.position || emp.department || 'Исполнитель';
+        if (assigneePreviewDept) assigneePreviewDept.textContent = emp.department || '';
+        if (assigneeSubmitBtn) assigneeSubmitBtn.disabled = false;
+    }
+
+    function renderAssigneeSuggestions(query) {
+        if (!assigneeAutocompleteList) return;
+        const q = (query || '').trim().toLowerCase();
+        const currentAssigneeIds = new Set((getAssignees() || []).map((a) => String(a.employee_id || a.id)));
+        const emps = (state && state.employees) ? state.employees : (CONFIG.employees || []);
+
+        const available = emps.filter((e) => !currentAssigneeIds.has(String(e.id)));
+        const matched = available.filter((e) => {
+            if (!q) return true;
+            return (e.full_name && e.full_name.toLowerCase().includes(q)) ||
+                   (e.position && e.position.toLowerCase().includes(q)) ||
+                   (e.department && e.department.toLowerCase().includes(q)) ||
+                   (e.email && e.email.toLowerCase().includes(q));
+        });
+
+        assigneeAutocompleteList.innerHTML = '';
+
+        if (matched.length === 0) {
+            const emptyEl = el('div', {
+                class: 'emp-autocomplete-empty',
+                style: 'padding: 24px 16px; text-align: center; color: var(--text-tertiary); font-size: 13px;',
+                text: available.length === 0 ? 'Все сотрудники уже добавлены в исполнители' : 'Сотрудники не найдены'
+            });
+            assigneeAutocompleteList.append(emptyEl);
+            assigneeAutocompleteList.style.display = 'flex';
+            return;
+        }
+
+        matched.forEach((e) => {
+            let avatarNode;
+            if (e.photo_url) {
+                avatarNode = el('img', {
+                    class: 'emp-autocomplete-avatar',
+                    src: e.photo_url,
+                    alt: e.full_name
+                });
+            } else {
+                const color = AVATAR_COLORS[(Math.abs(Number(e.id) || 1) - 1) % AVATAR_COLORS.length];
+                avatarNode = el('div', {
+                    class: 'emp-autocomplete-avatar',
+                    style: `background:${color}; display:inline-grid; place-items:center; color:#fff; font-size:11px; font-weight:700;`,
+                    text: e.initials || initials(e.full_name || '—')
+                });
+            }
+
+            const nameNode = el('div', {
+                class: 'emp-autocomplete-name',
+                html: highlightSearchMatch(e.full_name || '', q)
+            });
+            const subParts = [e.position, e.department].filter(Boolean);
+            const subNode = el('div', {
+                class: 'emp-autocomplete-sub',
+                text: subParts.join(' · ') || 'Должность не указана'
+            });
+            const infoNode = el('div', { class: 'emp-autocomplete-info' }, [nameNode, subNode]);
+
+            const row = el('div', {
+                class: 'emp-autocomplete-item',
+                style: 'cursor: pointer;',
+                onclick: (evt) => {
+                    evt.preventDefault();
+                    applyAssigneeSelection(e);
+                }
+            }, [avatarNode, infoNode]);
+
+            assigneeAutocompleteList.append(row);
+        });
+
+        assigneeAutocompleteList.style.display = 'flex';
+    }
+
     function openAddAssigneeModal() {
         if (!assigneeModal || !assigneeForm) return;
         assigneeForm.reset();
-        if (assigneePreviewCard) assigneePreviewCard.style.display = 'none';
-        if (assigneeSubmitBtn) assigneeSubmitBtn.disabled = true;
-
-        if (assigneeEmployeeSelect) {
-            assigneeEmployeeSelect.innerHTML = '<option value="">-- Выберите сотрудника --</option>';
-            const currentAssigneeIds = new Set((getAssignees() || []).map((a) => String(a.employee_id || a.id)));
-            const emps = (state && state.employees) ? state.employees : (CONFIG.employees || []);
-
-            emps.forEach((emp) => {
-                if (currentAssigneeIds.has(String(emp.id))) {
-                    return; // Уже в списке исполнителей
-                }
-                const opt = el('option', {
-                    value: String(emp.id),
-                    text: `${emp.full_name} — ${emp.position || 'Сотрудник'}${emp.department ? ' (' + emp.department + ')' : ''}`
-                });
-                assigneeEmployeeSelect.append(opt);
-            });
-        }
-
+        applyAssigneeSelection(null);
         assigneeModal.hidden = false;
-        if (assigneeEmployeeSelect) assigneeEmployeeSelect.focus();
+        if (assigneeSearchInput) {
+            assigneeSearchInput.focus();
+        }
     }
 
     function closeAddAssigneeModal() {
@@ -1683,42 +1781,41 @@
             n.addEventListener('click', closeAddAssigneeModal);
         });
     }
-    window.renderPeople = renderPeople;
 
-    if (assigneeEmployeeSelect) {
-        assigneeEmployeeSelect.addEventListener('change', () => {
-            const empId = assigneeEmployeeSelect.value;
-            if (!empId) {
+    if (assigneeSearchInput) {
+        assigneeSearchInput.addEventListener('input', () => {
+            const val = assigneeSearchInput.value;
+            if (assigneeSelectedEmployeeId && assigneeSelectedEmployeeId.value) {
+                if (assigneeSelectedEmployeeId) assigneeSelectedEmployeeId.value = '';
                 if (assigneePreviewCard) assigneePreviewCard.style.display = 'none';
+                if (assigneeAutocompleteList) assigneeAutocompleteList.style.display = 'flex';
                 if (assigneeSubmitBtn) assigneeSubmitBtn.disabled = true;
-                return;
             }
-            const emps = (state && state.employees) ? state.employees : (CONFIG.employees || []);
-            const emp = emps.find((e) => String(e.id) === empId);
-            if (emp) {
-                if (assigneePreviewCard) assigneePreviewCard.style.display = 'flex';
-                if (assigneePreviewAvatar) {
-                    assigneePreviewAvatar.innerHTML = '';
-                    if (emp.photo_url) {
-                        assigneePreviewAvatar.append(el('img', { src: emp.photo_url, alt: emp.full_name }));
-                    } else {
-                        const color = AVATAR_COLORS[(Math.abs(Number(emp.id) || 1) - 1) % AVATAR_COLORS.length];
-                        assigneePreviewAvatar.append(el('span', { class: 'avatar', style: `background:${color}`, text: initials(emp.full_name) }));
-                    }
-                }
-                if (assigneePreviewName) assigneePreviewName.textContent = emp.full_name;
-                if (assigneePreviewRole) assigneePreviewRole.textContent = emp.position || 'Исполнитель';
-                if (assigneePreviewDept) assigneePreviewDept.textContent = emp.department || '';
-                if (assigneeSubmitBtn) assigneeSubmitBtn.disabled = false;
+            if (assigneeClearBtn) {
+                assigneeClearBtn.hidden = !val.trim();
+            }
+            renderAssigneeSuggestions(val);
+        });
+
+        assigneeSearchInput.addEventListener('focus', () => {
+            if (!assigneeSelectedEmployeeId || !assigneeSelectedEmployeeId.value) {
+                renderAssigneeSuggestions(assigneeSearchInput.value);
             }
         });
     }
-    window.renderPeople = renderPeople;
+
+    if (assigneeClearBtn) {
+        assigneeClearBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            applyAssigneeSelection(null);
+            assigneeSearchInput.focus();
+        });
+    }
 
     if (assigneeForm) {
         assigneeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const selectedEmpId = assigneeEmployeeSelect && assigneeEmployeeSelect.value ? Number(assigneeEmployeeSelect.value) : null;
+            const selectedEmpId = assigneeSelectedEmployeeId && assigneeSelectedEmployeeId.value ? Number(assigneeSelectedEmployeeId.value) : null;
             if (!selectedEmpId) return;
 
             if (assigneeSubmitBtn) assigneeSubmitBtn.disabled = true;
@@ -1755,7 +1852,6 @@
             }
         });
     }
-    window.renderPeople = renderPeople;
 
     async function deleteAssignee(id) {
         try {

@@ -917,24 +917,29 @@
 <!-- Модальное окно добавления исполнителя -->
 <div class="modal" id="assigneeModal" hidden>
     <div class="modal__overlay" data-close></div>
-    <form class="modal__dialog modal__dialog--sm" id="assigneeForm" autocomplete="off">
+    <form class="modal__dialog modal__dialog--assignee" id="assigneeForm" autocomplete="off">
         <div class="modal__header">
             <h2>Добавить исполнителя</h2>
             <button class="icon-btn" type="button" data-close aria-label="Закрыть">&times;</button>
         </div>
-        <div class="modal__body" style="display:flex; flex-direction:column; gap:16px;">
-            <label class="form-field">
-                <span>Выберите сотрудника <span class="req">*</span></span>
-                <select id="assigneeEmployeeSelect" class="input" required>
-                    <option value="">-- Выберите сотрудника --</option>
-                </select>
-            </label>
-            <div id="assigneePreviewCard" class="assignee-preview-card" style="display:none;">
-                <div id="assigneePreviewAvatar" class="assignee-preview-avatar"></div>
-                <div class="assignee-preview-info">
-                    <div id="assigneePreviewName" class="assignee-preview-name"></div>
-                    <div id="assigneePreviewRole" class="assignee-preview-role"></div>
-                    <div id="assigneePreviewDept" class="assignee-preview-dept"></div>
+        <div class="modal__body assignee-modal__body">
+            <div class="field inv-emp-search-group">
+                <label class="field__label" for="assigneeSearchInput">Поиск сотрудника <span class="req">*</span></label>
+                <input type="hidden" id="assigneeSelectedEmployeeId" value="">
+                <div class="inv-emp-search-wrap" style="position: relative;">
+                    <input class="input" type="text" id="assigneeSearchInput" placeholder="Поиск по ФИО, должности, отделу..." autocomplete="off" style="width:100%; padding-right: 32px;">
+                    <button class="inv-emp-search-clear" type="button" id="assigneeClearBtn" title="Очистить сотрудника" hidden style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 18px; line-height: 1; cursor: pointer; color: var(--text-tertiary);">&times;</button>
+                </div>
+            </div>
+            <div class="assignee-select-area">
+                <div class="emp-autocomplete-list assignee-autocomplete-list" id="assigneeAutocompleteList"></div>
+                <div id="assigneePreviewCard" class="assignee-preview-card" style="display:none;">
+                    <div id="assigneePreviewAvatar" class="assignee-preview-avatar"></div>
+                    <div class="assignee-preview-info">
+                        <div id="assigneePreviewName" class="assignee-preview-name"></div>
+                        <div id="assigneePreviewRole" class="assignee-preview-role"></div>
+                        <div id="assigneePreviewDept" class="assignee-preview-dept"></div>
+                    </div>
                 </div>
             </div>
         </div>

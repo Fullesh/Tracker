@@ -3823,6 +3823,35 @@ img.avatar,
     max-width: 440px !important;
 }
 
+.modal__dialog--assignee {
+    max-width: 480px;
+    width: 100%;
+}
+
+.assignee-modal__body {
+    padding: 12px 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: visible;
+}
+
+.assignee-select-area {
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+}
+
+.assignee-autocomplete-list {
+    position: static;
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+}
 
 /* Assignee Preview Card */
 .assignee-preview-card {
